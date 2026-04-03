@@ -1,0 +1,46 @@
+{
+  "name": "webapp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@types/jsbarcode": "^3.11.4",
+    "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3",
+    "clsx": "^2.1.1",
+    "fastest-levenshtein": "^1.0.16",
+    "file-saver": "^2.0.5",
+    "firebase": "^12.11.0",
+    "jsbarcode": "^3.12.3",
+    "jszip": "^3.10.1",
+    "lucide-react": "^1.7.0",
+    "next": "14.2.35",
+    "pdf-lib": "^1.17.1",
+    "pdf.js-extract": "^0.2.1",
+    "pdfjs-dist": "^3.11.174",
+    "print-js": "^1.6.0",
+    "react": "^18",
+    "react-barcode": "^1.6.1",
+    "react-dom": "^18",
+    "tailwind-merge": "^3.5.0",
+    "tesseract.js": "^7.0.0",
+    "xlsx": "^0.18.5",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@types/file-saver": "^2.0.7",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}
