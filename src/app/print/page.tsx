@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useOrderStore } from "@/store";
 import { useAuthStore } from "@/authStore";
-import printJS from "print-js";
+
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/firebase";
 
@@ -45,7 +45,7 @@ export default function PrintPage() {
      return () => window.removeEventListener('click', handleGlobalClick);
   }, []);
 
-  const handleScan = (e: React.FormEvent) => {
+  const handleScan = async (e: React.FormEvent) => {
      e.preventDefault();
      const query = scanValue.trim();
      if (!query) return;
@@ -74,6 +74,8 @@ export default function PrintPage() {
      }
 
      try {
+         const printJS = (await import('print-js')).default;
+
          // Kích hoạt In Trực Tiếp 1 nốt nhạc bằng printJS mà không nhảy Tab!
          if (order.pdfBase64 && !blobUrls[order.id] && !order.pdfUrl) {
              printJS({
