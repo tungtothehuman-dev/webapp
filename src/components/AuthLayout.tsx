@@ -4,7 +4,7 @@ import { useAuthStore } from "@/authStore";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useOrderStore } from "@/store";
+import { useOrderStore, useWarehouseStore } from "@/store";
 import { usePdfTaskStore } from "@/pdfTaskStore";
 import LoginPage from "@/app/login/page"; // We'll create this next
 
@@ -33,9 +33,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (mounted && currentUser) {
       import('@/firebase').then(({ db }) => {
-        import('firebase/firestore').then(({ collection, onSnapshot }) => {
-          const unsubscribe = onSnapshot(collection(db, 'orders'), (snapshot) => {
-             let docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+        import('firebase/firestore').then(({ collection, onSnapshot, setDoc, doc }) => {
+          const unsubscribeOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
+             let docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
              
              // Thuật toán parse và Sắp xếp đảo ngược để Đơn mới nhất nằm trên cùng
              docs.sort((a, b) => {
@@ -53,7 +53,24 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
              setOrders(docs.length > 0 ? docs : []);
           });
-          // Lưu ý: unsubscribe hiện được chạy kín trong block này
+          
+          // Lắng nghe dữ liệu Kho từ Firebase (Đồng bộ mọi máy)
+          const unsubscribeWarehouses = onSnapshot(collection(db, 'warehouses'), (snapshot) => {
+             let docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+             
+             if (docs.length === 0) {
+                 // Nếu Firebase trống, chủ động đưa 4 HUB mặc định lên mây tạo nền gốc!
+                 const defaultHubs = [
+                     { id: "HUB NY", name: "HUB NY", address: "", receiverName: "" },
+                     { id: "HUB CA", name: "HUB CA", address: "", receiverName: "" },
+                     { id: "HUB TX", name: "HUB TX", address: "", receiverName: "" },
+                     { id: "HUB OR", name: "HUB OR", address: "", receiverName: "" }
+                 ];
+                 defaultHubs.forEach(hub => setDoc(doc(db, 'warehouses', hub.id), hub));
+             } else {
+                 useWarehouseStore.getState().setWarehouses(docs);
+             }
+          });
         });
       });
     }
@@ -89,7 +106,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                 <Link href="/orders" className={`px-4 py-2 rounded-lg transition-colors font-medium ${pathname === '/orders' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>Danh Sách Đơn</Link>
                 <Link href="/packages" className={`px-4 py-2 rounded-lg transition-colors font-medium ${pathname.includes('/packages') ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>Tạo Kiện Hàng</Link>
                 <Link href="/warehouses" className={`px-4 py-2 rounded-lg transition-colors font-medium ${pathname === '/warehouses' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>Quản Lý Kho Mỹ</Link>
-                <Link href="/accounts" className={`px-4 py-2 rounded-lg transition-colors font-medium ${pathname === '/accounts' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>Quản Lý Tài Khoản</Link>
+                <Link href="/accounts" className={`px-4 py-2 rounded-lg transition-colors font-medium ${pathname === '/accounts' ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>Quản Lý Tài Khoản</Link>
                 
                 {/* Upload Section Gộp (Accordion) */}
                 <div className="flex flex-col mt-2">

@@ -140,28 +140,32 @@ export default function UploadExcelPage() {
         addLog('info', `Đang rà soát và loại bỏ các đơn hàng trùng lặp...`);
         const getUniqKey = (o: any) => {
            const desc = (o.Description || "").toString().trim().toUpperCase();
+           // CHỈ check trùng lặp nếu có mã Description. Các đơn không có mã thì cho qua tuốt (không gộp chung)
            if (desc) return `DESC_${desc}`;
-           const name = (o["Receiver Name"] || "").toString().trim().toUpperCase();
-           const zip = (o["Receiver Zip"] || "").toString().trim().toUpperCase();
-           return `NAMEZIP_${name}_${zip}`;
+           // Tạo key ngẫu nhiên để các đơn rỗng Description luôn được coi là duy nhất, không bị vứt rác lầm
+           return `EMPTY_${Math.random()}`;
         };
 
         const existingKeys = new Set(existingOrders.map(getUniqKey));
         const uniqueNewData = [];
-        let duplicateCount = 0;
+        let duplicateRows: number[] = [];
 
-        for (const order of enrichedData) {
+        for (let i = 0; i < enrichedData.length; i++) {
+            const order = enrichedData[i];
             const key = getUniqKey(order);
             if (!existingKeys.has(key)) {
-                 existingKeys.add(key); // Ngăn trùng luôn trong chính nội bộ file Excel
+                 existingKeys.add(key); 
                  uniqueNewData.push(order);
             } else {
-                 duplicateCount++;
+                 duplicateRows.push(i + 2); // Excel rows are 1-indexed and have 1 header row, so index + 2
             }
         }
 
-        if (duplicateCount > 0) {
-             addLog('warning', `Đã loại bỏ ${duplicateCount} đơn hàng bị TRÙNG (Đã úp trước đó hoặc trùng trong file).`);
+        if (duplicateRows.length > 0) {
+             const rowListStr = duplicateRows.length > 15 
+                 ? duplicateRows.slice(0, 15).join(', ') + ` và ${duplicateRows.length - 15} dòng khác`
+                 : duplicateRows.join(', ');
+             addLog('error', `CẢNH BÁO: Đã từ chối ${duplicateRows.length} đơn hàng bị TRÙNG LẶP. Xem lại các dòng Excel báo lỗi: ${rowListStr}.`);
         }
 
         if (uniqueNewData.length === 0) {

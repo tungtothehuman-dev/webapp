@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useWarehouseStore, WarehouseItem } from "@/store";
+import { doc, setDoc, deleteDoc } from "firebase/firestore";
+import { db } from "@/firebase";
 
 export default function WarehousesPage() {
   const { warehouses, addWarehouse, updateWarehouse, deleteWarehouse } = useWarehouseStore();
@@ -36,12 +38,18 @@ export default function WarehousesPage() {
         return;
     }
     
-    addWarehouse({
+    const newData = {
        id: name,
        name: name,
        address: newWarehouseAddress.trim(),
        receiverName: newReceiverName.trim()
-    });
+    };
+    addWarehouse(newData);
+    
+    // Đồng bộ lên Firebase Mây
+    try {
+        setDoc(doc(db, 'warehouses', name), newData);
+    } catch(err) { console.error("Lỗi Firebase:", err); }
     setNewWarehouseName("");
     setNewWarehouseAddress("");
     setNewReceiverName("");
@@ -50,6 +58,7 @@ export default function WarehousesPage() {
   const handleDelete = (id: string) => {
     if (confirm(`Bạn có chắc chắn muốn xóa kho "${id}" khỏi danh sách?`)) {
         deleteWarehouse(id);
+        deleteDoc(doc(db, 'warehouses', id));
     }
   };
 
@@ -60,16 +69,23 @@ export default function WarehousesPage() {
   };
 
   const saveEdit = (id: string) => {
-      updateWarehouse(id, { address: editAddress.trim(), receiverName: editReceiverName.trim() });
+      const updates = { address: editAddress.trim(), receiverName: editReceiverName.trim() };
+      updateWarehouse(id, updates);
       setEditingId(null);
+      
+      // Đẩy lên Firebase để đồng bộ sang PC khác
+      const wh = warehouses.find(w => w.id === id);
+      if (wh) {
+          setDoc(doc(db, 'warehouses', id), { ...wh, ...updates }, { merge: true });
+      }
   };
 
   return (
     <div className="flex flex-col h-full max-w-5xl mx-auto mt-8">
         {/* Header */}
         <div className="mb-8 border-b border-neutral-800 pb-6">
-            <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-orange-400 flex items-center gap-3">
-               <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+            <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-teal-600 to-teal-400 flex items-center gap-3">
+               <svg className="w-8 h-8 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
                Quản Lý Thông Tin Kho Mỹ
             </h2>
             <p className="text-neutral-400 mt-2">Đăng ký mới hoặc thiết lập địa chỉ chi tiết cho từng trạm HUB nhận hàng.</p>
@@ -109,7 +125,7 @@ export default function WarehousesPage() {
                         className="w-full bg-white border-2 border-indigo-400 rounded-xl px-4 py-3 text-indigo-900 font-bold outline-none focus:border-indigo-600 transition-colors shadow-sm placeholder-slate-400"
                     />
                 </div>
-                <button type="submit" className="w-full lg:w-auto px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 border border-amber-600/50">
+                <button type="submit" className="w-full lg:w-auto px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 border border-teal-600/50">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
                     Thêm
                 </button>
@@ -131,7 +147,7 @@ export default function WarehousesPage() {
                     {normalizedWarehouses.map((wh, idx) => (
                         <li key={wh.id} className="p-6 hover:bg-slate-50 transition group flex flex-col md:flex-row md:items-start justify-between gap-4">
                             <div className="flex gap-5 flex-1">
-                                <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center font-bold border border-amber-200 flex-shrink-0 mt-1 shadow-sm">
+                                <div className="w-12 h-12 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center font-bold border border-teal-200 flex-shrink-0 mt-1 shadow-sm">
                                     {idx + 1}
                                 </div>
                                 <div className="flex-1">
@@ -156,7 +172,7 @@ export default function WarehousesPage() {
                                                 className="flex-1 w-full bg-white border-2 border-indigo-400 rounded-lg px-3 py-2 text-sm text-indigo-900 font-bold outline-none focus:border-indigo-600 transition-colors shadow-sm"
                                             />
                                             <div className="flex gap-2 w-full xl:w-auto xl:justify-end">
-                                                <button onClick={() => saveEdit(wh.id)} className="flex-1 xl:flex-none px-4 py-2 bg-amber-500 hover:bg-amber-600 border border-amber-600/50 text-white rounded-lg text-sm font-bold transition shadow-sm">
+                                                <button onClick={() => saveEdit(wh.id)} className="flex-1 xl:flex-none px-4 py-2 bg-teal-500 hover:bg-teal-600 border border-teal-600/50 text-white rounded-lg text-sm font-bold transition shadow-sm">
                                                     Lưu
                                                 </button>
                                                 <button onClick={() => setEditingId(null)} className="flex-1 xl:flex-none px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 rounded-lg text-sm font-bold transition shadow-sm">
@@ -177,7 +193,7 @@ export default function WarehousesPage() {
                                                 <span className="text-sm font-medium">
                                                     {wh.address ? wh.address : <span className="italic opacity-70">Chưa có địa chỉ (Nhấp để sửa)</span>}
                                                 </span>
-                                                <svg className="w-4 h-4 opacity-0 group-hover/address:opacity-100 text-amber-500 transition ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                                <svg className="w-4 h-4 opacity-0 group-hover/address:opacity-100 text-teal-500 transition ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                                             </div>
                                         </div>
                                     )}

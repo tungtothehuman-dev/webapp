@@ -36,7 +36,7 @@ export default function Home() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-700 to-cyan-600 tracking-tight">
-             Trang Chủ Bảng Phân Tích
+             DASHBOARD
           </h1>
           <p className="text-slate-500 mt-2 flex items-center gap-2">
             <span className="relative flex h-3 w-3">
@@ -126,18 +126,68 @@ export default function Home() {
       
       {/* Phân vùng Widget */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-         {/* Biểu đồ giả lập */}
-         <div className="lg:col-span-2 bg-white border border-slate-200 shadow-sm rounded-2xl p-8 min-h-[350px] flex flex-col items-center justify-center relative overflow-hidden group">
-             <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:20px_20px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-60"></div>
+         {/* Biểu đồ Thống kê React + Tailwind */}
+         <div className="lg:col-span-2 bg-white border border-slate-200 shadow-sm rounded-2xl p-6 min-h-[350px] flex flex-col relative overflow-hidden">
+             <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2 relative z-10">
+                <Activity className="w-5 h-5 text-indigo-500" />
+                Phân Tích Dòng Chảy Đơn Hàng
+             </h3>
              
-             <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-6 shadow-[0_8px_30px_rgb(0,0,0,0.08)] relative z-10 border border-slate-100">
-                 <Activity className="w-10 h-10 text-indigo-500 animate-pulse" />
-             </div>
-             
-             <h3 className="text-2xl font-bold text-slate-800 z-10 mb-2">Phân Tích Dòng Chảy Đơn Hàng</h3>
-             <p className="text-slate-500 z-10 text-center max-w-md text-sm leading-relaxed">
-                 Hệ thống biểu đồ trực quan thống kê tăng trưởng và trạng thái chi tiết của từng kiện hàng đang được phát triển.
-             </p>
+             {/* Dữ liệu lấy trực tiếp từ Orders Store */}
+             {(() => {
+                 const chartData = [
+                     { name: "Tổng Số", value: totalOrders, color: "bg-indigo-500 hover:bg-indigo-400" },
+                     { name: "Chưa Có PDF", value: noLabelCount, color: "bg-amber-400 hover:bg-amber-300" },
+                     { name: "Đã Quét Kho", value: usScannedCount, color: "bg-emerald-500 hover:bg-emerald-400" },
+                     { name: "Đã Hủy", value: canceledCount, color: "bg-rose-500 hover:bg-rose-400" },
+                 ];
+                 const maxVal = Math.max(...chartData.map(d => d.value), 5);
+                 
+                 return (
+                     <div className="flex-1 flex flex-col w-full">
+                         <div className="flex-1 flex items-end justify-around gap-2 sm:gap-8 mt-2 lg:pt-10 border-b-2 border-slate-100 pb-0 px-2 sm:px-8 relative z-10">
+                             {/* Lưới ngang nền */}
+                             <div className="absolute inset-0 flex flex-col justify-between pb-0 z-0 pointer-events-none opacity-40">
+                                 {[100, 75, 50, 25, 0].map(pct => (
+                                     <div key={pct} className="w-full border-t-2 border-dashed border-slate-200 flex items-center relative">
+                                         <span className="absolute -left-1 sm:-left-4 -translate-y-1/2 text-[10px] text-slate-400 w-8 text-right bg-white pr-1">
+                                             {Math.ceil(maxVal * pct / 100)}
+                                         </span>
+                                     </div>
+                                 ))}
+                             </div>
+                             
+                             {/* Cột Bar Chart */}
+                             {chartData.map((d, i) => (
+                                 <div key={i} className="relative flex flex-col items-center group w-12 sm:w-20 z-10 h-full justify-end cursor-pointer">
+                                     <div 
+                                         className={`w-full rounded-t-lg transition-all duration-1000 ease-out relative ${d.color} shadow-md`}
+                                         style={{ height: `${Math.max((d.value / maxVal) * 100, 2)}%` }}
+                                     >
+                                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex-col items-center opacity-0 group-hover:opacity-100 transition-opacity min-w-max hidden md:flex">
+                                            <span className="font-bold text-slate-700 text-xs sm:text-sm bg-white px-2.5 py-1 rounded-lg shadow-lg border border-slate-200">
+                                                {d.value} đơn
+                                            </span>
+                                            <div className="w-2 h-2 bg-white border-b border-r border-slate-200 rotate-45 -mt-1.5"></div>
+                                        </div>
+                                     </div>
+                                     <span className="absolute -bottom-6 text-[10px] sm:text-xs font-bold text-slate-500 text-center leading-tight whitespace-nowrap group-hover:text-slate-800 transition-colors">
+                                         {d.name}
+                                     </span>
+                                 </div>
+                             ))}
+                         </div>
+                         <div className="mt-10 flex justify-center gap-4 sm:gap-6">
+                              {chartData.map((d, idx) => (
+                                  <div key={idx} className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-medium text-slate-500">
+                                      <span className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${d.color.split(' ')[0]}`}></span>
+                                      <span className="hidden sm:inline">{d.name.replace(' Kho', '')}</span>
+                                  </div>
+                              ))}
+                         </div>
+                     </div>
+                 );
+             })()}
          </div>
          
          {/* Phím tắt thao tác */}

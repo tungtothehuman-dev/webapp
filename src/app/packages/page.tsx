@@ -64,7 +64,7 @@ export default function PackagesPage() {
       setCurrentPage(1);
   }, [filterDest]);
 
-  const displayedPackages = packages.filter(p => filterDest === "All" || p.destination === filterDest);
+  const displayedPackages = [...packages].reverse().filter(p => filterDest === "All" || p.destination === filterDest);
   const totalPages = Math.ceil(displayedPackages.length / itemsPerPage);
   const paginatedPackages = displayedPackages.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 

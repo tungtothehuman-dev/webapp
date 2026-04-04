@@ -6,11 +6,13 @@ import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import * as xlsx from 'xlsx';
 import { saveAs } from 'file-saver';
+import printJS from 'print-js';
 import JsBarcode from 'jsbarcode';
 import { PDFDocument } from 'pdf-lib';
 
 export default function OrdersPage() {
   const orders = useOrderStore((state) => state.orders);
+  const setOrders = useOrderStore((state) => state.setOrders);
   const clearOrders = useOrderStore((state) => state.clearOrders);
   const updateOrder = useOrderStore((state) => state.updateOrder);
   const packages = usePackageStore((state) => state.packages);
@@ -23,6 +25,9 @@ export default function OrdersPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(30);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteText, setBulkDeleteText] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTargetId, setUploadTargetId] = useState<string | null>(null);
@@ -123,8 +128,9 @@ export default function OrdersPage() {
       const tempCanvas = document.createElement("canvas");
       JsBarcode(tempCanvas, description, {
         text: description,
-        height: 120,
-        fontSize: 35,
+        width: 4,
+        height: 350,
+        fontSize: 60,
         background: "#ffffff",
         margin: 20
       });
@@ -139,15 +145,15 @@ export default function OrdersPage() {
       }
 
       const bcX = (canvas.width - bcWidth) / 2;
-      const bcY = (canvas.height / 2) - bcHeight - 60;
+      const bcY = (canvas.height / 2) - (bcHeight / 2) - 80;
 
       ctx.drawImage(tempCanvas, bcX, bcY, bcWidth, bcHeight);
 
       ctx.fillStyle = "#000000";
-      ctx.font = "bold 55px Arial, sans-serif";
+      ctx.font = "bold 70px Arial, sans-serif";
       ctx.textAlign = "center";
 
-      ctx.fillText(receiverName, canvas.width / 2, bcY + bcHeight + 80, maxBcWidth);
+      ctx.fillText(receiverName, canvas.width / 2, bcY + bcHeight + 120, maxBcWidth);
 
       const imgDataUrl = canvas.toDataURL("image/png");
 
@@ -161,9 +167,8 @@ export default function OrdersPage() {
         height: A7_HEIGHT,
       });
 
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
-      saveAs(blob, `Barcode_${description}.pdf`);
+      const base64Pdf = await pdfDoc.saveAsBase64();
+      printJS({ printable: base64Pdf, type: 'pdf', base64: true });
     } catch (error) {
       console.error("Lỗi khi tạo PDF Barcode", error);
       alert("Có lỗi xảy ra khi tạo Mã Vạch PDF.");
@@ -220,35 +225,44 @@ export default function OrdersPage() {
 
     const selectedOrders = orders.filter((_, idx) => selectedIndexes.has(idx));
 
-    const cleanData = selectedOrders.map(order => {
-      // Bỏ lại các object/mảng kĩ thuật nội bộ không phù hợp trình bày Excel
-      const { pdfBase64, ActionHistory, originalIndex, Status, ...rest } = order;
-      return {
-        ...rest,
-        Status: Status || 'Chờ xử lý'
-      };
-    });
-
     const templateHeaders = [
         "Sender Name", "Sender Company", "Sender Address1", "Sender Address2", "Sender City", "Sender State", "Sender Zipcode", "Sender Phone",
         "Receiver Name", "Receiver Company", "Receiver Address 1", "Receiver Address 2", "Receiver City", "Receiver State", "Receiver Zip", "Receiver Phone",
-        "Weight", "Length", "Width", "Height", "Description", "Reference1", "Reference2", "SenderCountry", "ReceiverCountry", "TrackingNumber", "UploadDate", "Status", "pdfUrl", "id"
+        "Weight_lbs", "Length_inch", "Width_inch", "Height_inch", "Description", "TrackingNumber", "UploadDate", "Status", "pdfUrl", "id", "HUB"
     ];
+
+    const cleanData = selectedOrders.map(order => {
+      const { pdfBase64, ActionHistory, originalIndex, Status, ...rest } = order;
+      
+      const rowData: any = {};
+      templateHeaders.forEach(header => { rowData[header] = ""; }); // Tạo cột rỗng trước để tránh mất cột
+
+      rowData["Weight_lbs"] = rest.Weight_lbs || rest.Weight || "";
+      rowData["Length_inch"] = rest.Length_inch || rest.Length || "";
+      rowData["Width_inch"] = rest.Width_inch || rest.Width || "";
+      rowData["Height_inch"] = rest.Height_inch || rest.Height || "";
+      rowData["HUB"] = rest.HUB || rest.Hub || "";
+      rowData["Status"] = Status || 'Chờ xử lý';
+
+      Object.keys(rest).forEach(k => {
+          if (k !== 'Weight' && k !== 'Length' && k !== 'Width' && k !== 'Height' && k !== 'Hub' && !templateHeaders.includes(k)) {
+              rowData[k] = rest[k];
+          } else if (templateHeaders.includes(k) && rest[k]) {
+              rowData[k] = rest[k];
+          }
+      });
+
+      return rowData;
+    });
 
     const allKeys = new Set<string>();
     cleanData.forEach((item: any) => Object.keys(item).forEach(k => allKeys.add(k)));
 
-    const finalHeaders: string[] = [];
-    templateHeaders.forEach(k => {
-        if (allKeys.has(k)) {
-             finalHeaders.push(k);
-             allKeys.delete(k);
-        }
-    });
-
-    // Gom nốt các cột lạ nếu có
+    const finalHeaders: string[] = [...templateHeaders];
     allKeys.forEach(k => {
-        finalHeaders.push(k);
+        if (!finalHeaders.includes(k)) {
+            finalHeaders.push(k);
+        }
     });
 
     const worksheet = xlsx.utils.json_to_sheet(cleanData, { header: finalHeaders });
@@ -270,6 +284,112 @@ export default function OrdersPage() {
 
   const isAllDisplayedSelected = paginatedOrders.length > 0 && paginatedOrders.every(item => selectedIndexes.has(item.originalIndex));
 
+  const handleDeleteSelected = async () => {
+    if (!window.confirm(`XÁC NHẬN: Bạn có chắc chắn muốn XÓA VĨNH VIỄN ${selectedIndexes.size} đơn hàng đã tick chọn khỏi hệ thống Đám mây không?`)) {
+        return;
+    }
+    const userInput = window.prompt("Vui lòng nhập MẬT KHẨU QUẢN TRỊ VIÊN để xác nhận xóa các đơn đã chọn:\n(Pass: admin123)");
+    if (userInput !== 'admin123') {
+        alert("❌ SAI MẬT KHẨU!");
+        return;
+    }
+
+    setIsDeletingAll(true);
+    try {
+        const { db } = await import('@/firebase');
+        const { doc, writeBatch } = await import('firebase/firestore');
+
+        const selectedOrders = orders.filter((_, idx) => selectedIndexes.has(idx));
+        
+        const MAX_BATCH_SIZE = 450;
+        let batch = writeBatch(db);
+        let count = 0;
+
+        for (const order of selectedOrders) {
+            batch.delete(doc(db, 'orders', order.id));
+            count++;
+            if (count % MAX_BATCH_SIZE === 0) {
+                await batch.commit();
+                batch = writeBatch(db);
+            }
+        }
+        if (count % MAX_BATCH_SIZE !== 0) {
+            await batch.commit();
+        }
+
+        const remainingOrders = orders.filter((_, idx) => !selectedIndexes.has(idx));
+        setOrders(remainingOrders);
+        setSelectedIndexes(new Set());
+        alert(`Đã xóa thành công ${count} mã được chọn khỏi đám mây!`);
+    } catch (err: any) {
+        alert("Lỗi khi xóa dữ liệu: " + err.message);
+    } finally {
+        setIsDeletingAll(false);
+    }
+  };
+
+  const handleBulkDeleteSubmit = async () => {
+      const descriptions = bulkDeleteText.split(/[\n,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+      if (descriptions.length === 0) {
+          alert("Vui lòng nhập ít nhất 1 mã Description để xóa.");
+          return;
+      }
+      if (!window.confirm(`XÁC NHẬN: Hệ thống sẽ tiến hành rà soát và XÓA VĨNH VIỄN các đơn hàng thuộc ${descriptions.length} mã Description bạn cung cấp. Bạn có tự tin gõ đúng mã không?`)) {
+          return;
+      }
+      const userInput = window.prompt("Nhập MẬT KHẨU QUẢN TRỊ VIÊN để kích hoạt Lò Thiêu Đám Mây:\n(Pass: admin123)");
+      if (userInput !== 'admin123') {
+          alert("❌ SAI MẬT KHẨU!");
+          return;
+      }
+
+      setIsDeletingAll(true);
+      setShowBulkDeleteModal(false);
+      try {
+          const { db } = await import('@/firebase');
+          const { doc, writeBatch } = await import('firebase/firestore');
+          
+          let count = 0;
+          let batch = writeBatch(db);
+          let currentBatchSize = 0;
+          let idsToDelete = new Set<string>();
+
+          for (const order of orders) {
+              const desc = (order.Description || "").toString().trim().toUpperCase();
+              if (descriptions.includes(desc)) {
+                  idsToDelete.add(order.id);
+                  batch.delete(doc(db, 'orders', order.id));
+                  count++;
+                  currentBatchSize++;
+
+                  if (currentBatchSize === 450) {
+                      await batch.commit();
+                      batch = writeBatch(db);
+                      currentBatchSize = 0;
+                  }
+              }
+          }
+
+          if (currentBatchSize > 0) {
+              await batch.commit();
+          }
+
+          if (count === 0) {
+              alert("Không tìm thấy đơn hàng nào khớp với danh sách mã bạn nhập!");
+          } else {
+              const remainingOrders = orders.filter(o => !idsToDelete.has(o.id));
+              setOrders(remainingOrders);
+              setSelectedIndexes(new Set());
+              setBulkDeleteText("");
+              alert(`TUYỆT VỜI: Đã đốt thành tro ${count} đơn hàng thuộc danh sách mã bạn cung cấp khỏi mây!`);
+          }
+      } catch (err: any) {
+          alert("Lỗi khi xóa dữ liệu: " + err.message);
+      } finally {
+          setIsDeletingAll(false);
+      }
+  };
+
   return (
     <div>
         <input 
@@ -287,6 +407,15 @@ export default function OrdersPage() {
               <button onClick={exportExcel} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-all shadow-md flex items-center gap-2 border border-indigo-500/50">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                 Xuất Excel ({selectedIndexes.size})
+              </button>
+              
+              <button 
+                  onClick={() => selectedIndexes.size > 0 ? handleDeleteSelected() : setShowBulkDeleteModal(true)} 
+                  disabled={isDeletingAll}
+                  className="px-4 py-2 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white rounded-lg text-sm font-bold uppercase transition-all shadow-sm flex items-center gap-2 border border-red-200 disabled:opacity-50 min-w-[190px] justify-center">
+                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                 {isDeletingAll ? "Đang xóa Cloud..." 
+                   : (selectedIndexes.size > 0 ? `Xóa ${selectedIndexes.size} Đã Chọn` : "Xóa Hàng Loạt")}
               </button>
             </>
           )}
@@ -686,9 +815,49 @@ export default function OrdersPage() {
                                  <div className="flex items-center justify-between mt-1 pt-2 border-t border-dashed border-indigo-100">
                                     <span className="text-indigo-500 font-medium text-sm flex items-center gap-1.5"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg> Nằm trong kiện:</span>
                                     <span className="text-sm font-bold font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">{foundPkg.id}</span>
-                                 </div>
-                             );
-                         }
+                             
+      {/* Modal Xóa Hàng Loạt */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm shadow-2xl">
+          <div className="bg-white border-2 border-red-200 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl relative flex flex-col">
+            <div className="px-6 py-4 border-b border-red-100 flex justify-between items-center bg-red-50">
+              <div className="flex items-center gap-2 text-red-700">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                <span className="font-black text-lg uppercase tracking-tight">Xóa theo danh sách Mã</span>
+              </div>
+              <button onClick={() => setShowBulkDeleteModal(false)} className="text-red-400 hover:text-red-800 p-2 rounded-lg transition">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-slate-600 mb-4 font-medium leading-relaxed">
+                Sao chép và dán danh sách <strong>Mã Description</strong> bạn muốn xóa vào ô bên dưới.
+                Mỗi mã cách nhau bởi dấu phẩy hoặc xuống dòng.
+              </p>
+              <textarea
+                value={bulkDeleteText}
+                onChange={(e) => setBulkDeleteText(e.target.value)}
+                className="w-full h-40 border-2 border-slate-200 hover:border-indigo-300 focus:border-indigo-500 rounded-xl p-4 text-sm font-mono focus:outline-none transition-colors shadow-inner resize-none text-slate-700"
+                placeholder="Ví dụ: 
+ORDER-1234
+ORDER-5678"
+              ></textarea>
+            </div>
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button onClick={() => setShowBulkDeleteModal(false)} className="px-6 py-2.5 bg-white text-slate-600 font-bold rounded-xl border border-slate-300 hover:bg-slate-100 transition">
+                Hủy bỏ
+              </button>
+              <button onClick={handleBulkDeleteSubmit} disabled={!bulkDeleteText.trim()} className="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-md transition disabled:opacity-50 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                Thực Hiện Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
                          return null;
                       })()}
                     </div>
@@ -754,9 +923,49 @@ export default function OrdersPage() {
                             </div>
                           </div>
                         ))}
-                      </div>
-                    );
-                  })()}
+                  
+      {/* Modal Xóa Hàng Loạt */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm shadow-2xl">
+          <div className="bg-white border-2 border-red-200 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl relative flex flex-col">
+            <div className="px-6 py-4 border-b border-red-100 flex justify-between items-center bg-red-50">
+              <div className="flex items-center gap-2 text-red-700">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                <span className="font-black text-lg uppercase tracking-tight">Xóa theo danh sách Mã</span>
+              </div>
+              <button onClick={() => setShowBulkDeleteModal(false)} className="text-red-400 hover:text-red-800 p-2 rounded-lg transition">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-slate-600 mb-4 font-medium leading-relaxed">
+                Sao chép và dán danh sách <strong>Mã Description</strong> bạn muốn xóa vào ô bên dưới.
+                Mỗi mã cách nhau bởi dấu phẩy hoặc xuống dòng.
+              </p>
+              <textarea
+                value={bulkDeleteText}
+                onChange={(e) => setBulkDeleteText(e.target.value)}
+                className="w-full h-40 border-2 border-slate-200 hover:border-indigo-300 focus:border-indigo-500 rounded-xl p-4 text-sm font-mono focus:outline-none transition-colors shadow-inner resize-none text-slate-700"
+                placeholder="Ví dụ: 
+ORDER-1234
+ORDER-5678"
+              ></textarea>
+            </div>
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button onClick={() => setShowBulkDeleteModal(false)} className="px-6 py-2.5 bg-white text-slate-600 font-bold rounded-xl border border-slate-300 hover:bg-slate-100 transition">
+                Hủy bỏ
+              </button>
+              <button onClick={handleBulkDeleteSubmit} disabled={!bulkDeleteText.trim()} className="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-md transition disabled:opacity-50 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                Thực Hiện Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+})()}
                 </div>
               </div>
 
@@ -766,6 +975,44 @@ export default function OrdersPage() {
         </div>
       )}
 
+
+      {/* Modal Xóa Hàng Loạt */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm shadow-2xl">
+          <div className="bg-white border-2 border-red-200 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl relative flex flex-col">
+            <div className="px-6 py-4 border-b border-red-100 flex justify-between items-center bg-red-50">
+              <div className="flex items-center gap-2 text-red-700">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                <span className="font-black text-lg uppercase tracking-tight">Xóa theo danh sách Mã</span>
+              </div>
+              <button onClick={() => setShowBulkDeleteModal(false)} className="text-red-400 hover:text-red-800 p-2 rounded-lg transition">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-slate-600 mb-4 font-medium leading-relaxed">
+                Sao chép và dán danh sách <strong>Mã Description</strong> bạn muốn xóa vào ô bên dưới.
+                Mỗi mã cách nhau bởi dấu phẩy hoặc xuống dòng.
+              </p>
+              <textarea
+                value={bulkDeleteText}
+                onChange={(e) => setBulkDeleteText(e.target.value)}
+                className="w-full h-40 border-2 border-slate-200 hover:border-indigo-300 focus:border-indigo-500 rounded-xl p-4 text-sm font-mono focus:outline-none transition-colors shadow-inner resize-none text-slate-700"
+                placeholder="Ví dụ: \nORDER-1234\nORDER-5678"
+              ></textarea>
+            </div>
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button onClick={() => setShowBulkDeleteModal(false)} className="px-6 py-2.5 bg-white text-slate-600 font-bold rounded-xl border border-slate-300 hover:bg-slate-100 transition">
+                Hủy bỏ
+              </button>
+              <button onClick={handleBulkDeleteSubmit} disabled={!bulkDeleteText.trim()} className="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-md transition disabled:opacity-50 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                Thực Hiện Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

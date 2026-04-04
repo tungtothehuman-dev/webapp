@@ -150,32 +150,35 @@ export default function PackageDetailPage() {
         const updatedOrderDescriptions = activePkg.orderDescriptions.filter((c: string) => c !== code);
         setPackage(activePkg, { orderDescriptions: updatedOrderDescriptions });
 
-        // Khôi phục trạng thái đơn hàng (trở về Chờ xử lý)
+        // Khôi phục trạng thái đơn hàng (chỉ khi nó đang là 'Đóng kiện')
         const orderMatchIdx = orders.findIndex(o => o.Description === code);
         if (orderMatchIdx !== -1) {
             const orderMatch = orders[orderMatchIdx];
-            const now = new Date();
-            const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} ${now.getDate().toString().padStart(2, '0')}/${(now.getMonth()+1).toString().padStart(2, '0')}/${now.getFullYear()}`;
             
-            const newLog = {
-                action: `Gỡ khỏi Kiện ${activePkg.id}`,
-                user: currentUser ? currentUser.displayName : "Hệ thống",
-                timestamp: timeString
-            };
-            
-            updateOrder(orderMatch.id, {
-                Status: 'Chờ xử lý',
-                ActionHistory: [...(orderMatch.ActionHistory || []), newLog]
-            });
-            
-            try {
-                const orderRef = doc(db, 'orders', orderMatch.id);
-                updateDoc(orderRef, {
+            if (orderMatch.Status === 'Đóng kiện') {
+                const now = new Date();
+                const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} ${now.getDate().toString().padStart(2, '0')}/${(now.getMonth()+1).toString().padStart(2, '0')}/${now.getFullYear()}`;
+                
+                const newLog = {
+                    action: `Gỡ khỏi Kiện ${activePkg.id}`,
+                    user: currentUser ? currentUser.displayName : "Hệ thống",
+                    timestamp: timeString
+                };
+                
+                updateOrder(orderMatch.id, {
                     Status: 'Chờ xử lý',
                     ActionHistory: [...(orderMatch.ActionHistory || []), newLog]
                 });
-            } catch (e) {
-                console.error("Lỗi cập nhật CSDL gỡ kiện:", e);
+                
+                try {
+                    const orderRef = doc(db, 'orders', orderMatch.id);
+                    updateDoc(orderRef, {
+                        Status: 'Chờ xử lý',
+                        ActionHistory: [...(orderMatch.ActionHistory || []), newLog]
+                    });
+                } catch (e) {
+                    console.error("Lỗi cập nhật CSDL gỡ kiện:", e);
+                }
             }
         }
     };
@@ -208,46 +211,51 @@ export default function PackageDetailPage() {
             return;
         }
 
+        const templateHeaders = [
+            "Sender Name", "Sender Company", "Sender Address1", "Sender Address2", "Sender City", "Sender State", "Sender Zipcode", "Sender Phone",
+            "Receiver Name", "Receiver Company", "Receiver Address 1", "Receiver Address 2", "Receiver City", "Receiver State", "Receiver Zip", "Receiver Phone",
+            "Weight_lbs", "Length_inch", "Width_inch", "Height_inch", "Description", "TrackingNumber", "UploadDate", "Status", "pdfUrl", "id", "HUB"
+        ];
+
         const cleanData = validCodes.map((code: string) => {
             const order = orders.find(o => o.Description === code);
             if (!order) return {};
             const { pdfBase64, ActionHistory, originalIndex, Status, ...rest } = order;
-            return {
-                ...rest,
-                'Trạng thái': 'Đóng kiện',
-                'Kiện Hàng': activePkg.id,
-                'Master Tracking': activePkg.masterTracking || "Chưa có"
-            };
+            
+            const rowData: any = {};
+            templateHeaders.forEach(header => { rowData[header] = ""; }); // Khởi tạo rỗng để bảo tồn cột
+
+            rowData["Weight_lbs"] = rest.Weight_lbs || rest.Weight || "";
+            rowData["Length_inch"] = rest.Length_inch || rest.Length || "";
+            rowData["Width_inch"] = rest.Width_inch || rest.Width || "";
+            rowData["Height_inch"] = rest.Height_inch || rest.Height || "";
+            rowData["HUB"] = rest.HUB || rest.Hub || "";
+            rowData["Status"] = 'Đóng kiện';
+
+            Object.keys(rest).forEach(k => {
+                if (k !== 'Weight' && k !== 'Length' && k !== 'Width' && k !== 'Height' && k !== 'Hub' && !templateHeaders.includes(k)) {
+                    rowData[k] = rest[k];
+                } else if (templateHeaders.includes(k) && rest[k]) {
+                    rowData[k] = rest[k];
+                }
+            });
+
+            rowData['Trạng thái'] = 'Đóng kiện';
+            rowData['Kiện Hàng'] = activePkg.id;
+            rowData['Master Tracking'] = activePkg.masterTracking || "Chưa có";
+            return rowData;
         });
 
-        // 1. Định nghĩa bộ khung tiêu chuẩn (Template) cho logic Sắp xếp
-        const templateHeaders = [
-            "Sender Name", "Sender Company", "Sender Address1", "Sender Address2", "Sender City", "Sender State", "Sender Zipcode", "Sender Phone",
-            "Receiver Name", "Receiver Company", "Receiver Address 1", "Receiver Address 2", "Receiver City", "Receiver State", "Receiver Zip", "Receiver Phone",
-            "Weight", "Length", "Width", "Height", "Description", "Reference1", "Reference2", "SenderCountry", "ReceiverCountry", "TrackingNumber", "UploadDate", "Status", "pdfUrl", "id"
-        ];
-
-        // 2. Gom tất cả các cột thực tế có trong dữ liệu
         const allKeys = new Set<string>();
         cleanData.forEach((item: any) => Object.keys(item).forEach(k => allKeys.add(k)));
 
-        // 3. Ráp cột theo thứ tự ưu tiên của Template
-        const finalHeaders: string[] = [];
-        templateHeaders.forEach(k => {
-            if (allKeys.has(k) && k !== 'Trạng thái' && k !== 'Kiện Hàng' && k !== 'Master Tracking') {
-                 finalHeaders.push(k);
-                 allKeys.delete(k); // Đã thêm thì xóa để khỏi tính lại
-            }
-        });
-
-        // 4. Thêm nốt các cột mà Template không có (nếu sếp tự chế thêm cột gì lạ vào Excel)
+        const finalHeaders: string[] = [...templateHeaders];
         allKeys.forEach(k => {
-            if (k !== 'Trạng thái' && k !== 'Kiện Hàng' && k !== 'Master Tracking') {
+            if (!finalHeaders.includes(k) && k !== 'Trạng thái' && k !== 'Kiện Hàng' && k !== 'Master Tracking') {
                 finalHeaders.push(k);
             }
         });
 
-        // 5. Ba cột phát sinh sau Đóng kiện LUÔN NẰM CUỐI CÙNG
         finalHeaders.push('Trạng thái', 'Kiện Hàng', 'Master Tracking');
 
         // Báo cho xlsx biết tao muốn ép theo cấu trúc này
@@ -264,7 +272,7 @@ export default function PackageDetailPage() {
         <div className="flex flex-col h-full mt-2">
             {/* Thanh điều hướng */}
             <div className="mb-6 flex items-center">
-                <button onClick={() => router.push('/packages')} className="text-teal-400 hover:text-teal-300 transition flex items-center gap-2 font-medium">
+                <button onClick={() => router.push('/packages')} className="text-slate-800 hover:text-slate-600 transition flex items-center gap-2 font-bold text-xl tracking-tight">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
                     Danh sách kiện hàng
                 </button>
@@ -340,7 +348,11 @@ export default function PackageDetailPage() {
 
                 <div className="hidden lg:block w-px bg-slate-100"></div>
 
-                <div className="flex items-center">
+                <div className="flex items-center gap-4">
+                    <button onClick={exportExcel} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition text-sm flex items-center gap-2 shadow-sm">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Xuất Excel
+                    </button>
                     <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-500 hover:text-slate-800 transition select-none bg-slate-50 border border-slate-200 hover:border-slate-300 px-4 py-3 rounded-xl shadow-sm">
                         <input 
                             type="checkbox" 
@@ -374,10 +386,6 @@ export default function PackageDetailPage() {
                 </form>
 
                 <div className="flex gap-3">
-                    <button onClick={exportExcel} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-md transition text-sm flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                        Xuất Excel
-                    </button>
                     {!isClosed && (
                         <button 
                             type="button"

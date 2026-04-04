@@ -86,6 +86,7 @@ export interface WarehouseItem {
 
 interface WarehouseStore {
   warehouses: WarehouseItem[];
+  setWarehouses: (whs: WarehouseItem[]) => void;
   addWarehouse: (wh: WarehouseItem) => void;
   updateWarehouse: (id: string, updates: Partial<WarehouseItem>) => void;
   deleteWarehouse: (id: string) => void;
@@ -100,6 +101,7 @@ export const useWarehouseStore = create<WarehouseStore>()(
           { id: "HUB TX", name: "HUB TX", address: "", receiverName: "" },
           { id: "HUB OR", name: "HUB OR", address: "", receiverName: "" }
       ],
+      setWarehouses: (whs) => set({ warehouses: whs }),
       addWarehouse: (wh) => set((state) => {
           return { warehouses: [...state.warehouses, wh] };
       }),
