@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import * as xlsx from 'xlsx';
 import { saveAs } from 'file-saver';
-import printJS from 'print-js';
+
 import JsBarcode from 'jsbarcode';
 import { PDFDocument } from 'pdf-lib';
 
@@ -168,6 +168,7 @@ export default function OrdersPage() {
       });
 
       const base64Pdf = await pdfDoc.saveAsBase64();
+      const printJS = (await import('print-js')).default;
       printJS({ printable: base64Pdf, type: 'pdf', base64: true });
     } catch (error) {
       console.error("Lỗi khi tạo PDF Barcode", error);
