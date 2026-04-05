@@ -48,9 +48,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                     const [day, month, year] = parts[1].split("/");
                     return new Date(Number(year), Number(month) - 1, Number(day), Number(hours), Number(minutes)).getTime() || 0;
                 };
-                const valA = a.UploadDate || a["Ngày/Tháng"] || "";
-                const valB = b.UploadDate || b["Ngày/Tháng"] || "";
-                return parseTime(valB) - parseTime(valA);
+                
+                // Trọng số 'createdAt' (chính xác đến ms) hoặc parse string lỏng lẻo cho các data cũ
+                const valA = a.createdAt || parseTime(a.UploadDate || a["Ngày/Tháng"] || "");
+                const valB = b.createdAt || parseTime(b.UploadDate || b["Ngày/Tháng"] || "");
+                return valB - valA; // Xếp mới nhất lên trên
              });
 
              setOrders(docs.length > 0 ? docs : []);
@@ -168,7 +170,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                     {isUploadExpanded && !isSidebarCollapsed && (
                         <div className="flex flex-col mt-1 ml-3 border-l-2 border-slate-700 space-y-1 pl-3 overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200">
                             <Link href="/upload-excel" className={`px-4 py-2 rounded-lg transition-colors text-[13px] font-medium ${pathname === '/upload-excel' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>File Excel</Link>
-                            <Link href="/upload-pdf" className={`px-4 py-2 rounded-lg transition-colors text-[13px] font-medium ${pathname === '/upload-pdf' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>File PDF Labels</Link>
+                            <Link href="/upload-pdf" className={`px-4 py-2 rounded-lg transition-colors text-[13px] font-medium ${pathname === '/upload-pdf' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>File PDF Label</Link>
                         </div>
                     )}
                 </div>

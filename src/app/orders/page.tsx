@@ -53,12 +53,105 @@ export default function OrdersPage() {
       if (!uploadTargetId || !e.target.files || e.target.files.length === 0) return;
       const file = e.target.files[0];
       
-      const defaultTracking = file.name.replace(/\.pdf$/i, "").toUpperCase();
-      const trackingInput = window.prompt("Hãy kiểm tra và xác nhận Tracking Number cho file này:", defaultTracking);
-      
-      if (trackingInput === null) {
-          setUploadTargetId(null);
-          return;
+      showToast('Đang quét mã vạch từ PDF, vui lòng đợi...', 'info' as any);
+      let finalTracking = "";
+
+      try {
+          // --- AI BARCODE EXTRACTION ---
+          const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.js');
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+          const { BrowserMultiFormatReader } = await import('@zxing/library');
+
+          const arrayBuffer = await file.arrayBuffer();
+          const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+          const pdfDocument = await loadingTask.promise;
+          const page = await pdfDocument.getPage(1);
+          
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement("canvas");
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+          const ctx = canvas.getContext("2d");
+          
+          if (ctx) {
+              await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+              try {
+                  const codeReader = new BrowserMultiFormatReader();
+                  const result = await codeReader.decodeFromImageUrl(canvas.toDataURL("image/png"));
+                  let rawBarcode = result.getText().toUpperCase();
+                  finalTracking = rawBarcode.length > 22 ? rawBarcode.slice(-22) : rawBarcode;
+              } catch (e) {
+                  console.warn("ZXing failed. Attempting native text regex fallback...");
+              }
+          }
+          
+          // Trích xuất text nhúng native (nếu có)
+          if (!finalTracking) {
+              const textContent = await page.getTextContent();
+              let fullTextStr = textContent.items.map((item: any) => item.str).join("").replace(/\s/g, "");
+              
+              // Nếu file PDF là ảnh chết (Scanned Label) thì bật Lõi Trí Tuệ Kép OCR.Space
+              if (fullTextStr.length < 30 && ctx) {
+                 try {
+                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                     const data = imageData.data;
+                     for (let k = 0; k < data.length; k += 4) {
+                         const avg = (data[k] + data[k + 1] + data[k + 2]) / 3;
+                         const color = avg > 150 ? 255 : 0;
+                         data[k] = color; data[k + 1] = color; data[k + 2] = color;
+                     }
+                     ctx.putImageData(imageData, 0, 0);
+
+                     const imgBase64 = canvas.toDataURL("image/jpeg", 0.9);
+                     const formData = new FormData();
+                     formData.append("base64Image", imgBase64);
+                     formData.append("language", "eng");
+                     formData.append("isTable", "false");
+                     formData.append("apikey", "K84562098688957");
+                     
+                     const ocrRes = await fetch("https://api.ocr.space/parse/image", { method: "POST", body: formData });
+                     const ocrData = await ocrRes.json();
+                     if (ocrData.ParsedResults && ocrData.ParsedResults.length > 0) {
+                         fullTextStr = (ocrData.ParsedResults[0].ParsedText || "").replace(/\s/g, "");
+                     }
+                 } catch(e) {
+                     console.warn("Lỗi OCR.Space fallback:", e);
+                 }
+              }
+
+              // Tìm dãy số có dạng 9... dài 22 số (USPS chuẩn)
+              const uspsMatch = fullTextStr.match(/(?:420\d{5})?(9\d{21})/);
+              const upsMatch = fullTextStr.match(/1Z[A-Z0-9]{16}/i);
+              
+              if (uspsMatch && uspsMatch[1]) {
+                  finalTracking = uspsMatch[1];
+              } else if (upsMatch) {
+                  finalTracking = upsMatch[0].toUpperCase();
+              }
+          }
+      } catch (err) {
+          console.error("Lỗi khi tự động giải mã tracking PDF:", err);
+      }
+
+      if (!finalTracking) {
+          showToast('Quét mã thất bại, tự động lọc Tracking từ tên File đính kèm.', 'warning' as any);
+          const defaultTracking = file.name.replace(/\.pdf$/i, "").toUpperCase();
+          const trackingClean = defaultTracking.replace(/\s/g, "");
+          
+          const fnMatch = trackingClean.match(/(?:420\d{5})?(9\d{21})/);
+          const upsMatch = trackingClean.match(/1Z[A-Z0-9]{16}/i);
+          const tenDigitsMatch = defaultTracking.match(/(?:^|\s)([\d]{10,22})(?:\s|$)/); // Bắt phần số nguyên khối dài (như mã DHL)
+
+          if (fnMatch && fnMatch[1]) {
+             finalTracking = fnMatch[1];
+          } else if (upsMatch) {
+             finalTracking = upsMatch[0].toUpperCase();
+          } else if (tenDigitsMatch && tenDigitsMatch[1]) {
+             finalTracking = tenDigitsMatch[1];
+          } else {
+             finalTracking = defaultTracking; 
+          }
       }
       
       try {
@@ -66,7 +159,7 @@ export default function OrdersPage() {
           const { doc, updateDoc } = await import('firebase/firestore');
 
           const formData = new FormData();
-          formData.append("file", file, `${trackingInput}.pdf`);
+          formData.append("file", file, `${finalTracking}.pdf`);
           formData.append("upload_preset", "THE HUB");
           formData.append("public_id", uploadTargetId);
 
@@ -87,17 +180,17 @@ export default function OrdersPage() {
           const targetOrder = orders.find(o => o.id === uploadTargetId);
           
           await updateDoc(orderRef, {
-              TrackingNumber: trackingInput,
+              TrackingNumber: finalTracking,
               pdfUrl: pdfUrl,
               ActionHistory: [...(targetOrder?.ActionHistory || []), {
-                  action: `Ghép tay PDF: ${trackingInput}`,
+                  action: `Ghép thủ công PDF: ${finalTracking}`,
                   user: currentUser?.displayName || 'Ẩn danh',
                   timestamp: new Date().toLocaleString()
               }]
           });
           
           updateOrder(uploadTargetId, {
-              TrackingNumber: trackingInput,
+              TrackingNumber: finalTracking,
               pdfUrl: pdfUrl,
           }); // Update local store
           
@@ -702,7 +795,7 @@ export default function OrdersPage() {
                   <th className="px-3 py-3 text-center">MÃ ĐƠN HÀNG</th>
                   <th className="px-3 py-3 text-center">Tên Người Nhận</th>
                   <th className="px-3 py-3 text-center">Tracking Number</th>
-                  <th className="px-3 py-3 text-center">Tải Label Khách</th>
+                  <th className="px-3 py-3 text-center">Tải Label</th>
                   <th className="px-3 py-3 text-center w-32">Trạng Thái</th>
                   <th className="px-3 py-3 text-center">HUB</th>
                   <th className="px-3 py-3 text-center">Ngày/Tháng</th>
@@ -749,31 +842,54 @@ export default function OrdersPage() {
                         {order.TrackingNumber || <span className="text-red-400 italic text-xs font-normal">Chưa nạp PDF</span>}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        {order.pdfUrl ? (
-                          <button
-                            onClick={() => window.open(order.pdfUrl, '_blank')}
-                            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-100 rounded-md shadow-sm transition-all font-medium inline-flex items-center gap-1.5 text-xs whitespace-nowrap">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                            Tải Label PDF
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleManualUploadClick(order.id)}
-                            disabled={uploadTargetId === order.id}
-                            className={`px-3 py-1.5 border rounded-md shadow-sm transition-all font-medium inline-flex items-center gap-1.5 text-xs whitespace-nowrap ${uploadTargetId === order.id ? 'bg-indigo-100 text-indigo-500 border-indigo-200 cursor-wait' : 'bg-slate-50 hover:bg-slate-200 text-slate-500 border-slate-200'}`}>
-                            {uploadTargetId === order.id ? (
-                                <>
-                                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                    Đang tải...
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-                                    Gắn File
-                                </>
-                            )}
-                          </button>
-                        )}
+                        {(() => {
+                           const isManualMatch = order.ActionHistory?.some((h: any) => h.action && (h.action.includes("Ghép thủ công") || h.action.includes("Ghép tay")));
+                           if (order.pdfUrl) {
+                              return (
+                                 <div className="relative inline-flex items-center justify-center">
+                                    <button
+                                       onClick={() => window.open(order.pdfUrl, '_blank')}
+                                       className={`px-3 py-1.5 border rounded-md shadow-sm transition-all font-medium inline-flex items-center justify-center gap-1.5 text-xs whitespace-nowrap min-w-[125px] ${
+                                         isManualMatch
+                                           ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
+                                           : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border-indigo-100'
+                                       }`}>
+                                       <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                       <span>Tải Label PDF</span>
+                                    </button>
+                                    {isManualMatch && (
+                                       <div className="absolute top-1/2 -translate-y-1/2 -right-8">
+                                          <button
+                                            onClick={() => handleManualUploadClick(order.id)}
+                                            title="Sửa / Up lại file khác"
+                                            className="p-1.5 text-amber-500 hover:bg-amber-100 hover:text-amber-700 border border-transparent hover:border-amber-200 rounded-md transition-colors"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                          </button>
+                                       </div>
+                                    )}
+                                 </div>
+                              );
+                           }
+                           return (
+                               <button
+                                 onClick={() => handleManualUploadClick(order.id)}
+                                 disabled={uploadTargetId === order.id}
+                                 className={`px-3 py-1.5 border rounded-md shadow-sm transition-all font-medium inline-flex items-center justify-center gap-1.5 text-xs whitespace-nowrap min-w-[125px] ${uploadTargetId === order.id ? 'bg-indigo-100 text-indigo-500 border-indigo-200 cursor-wait' : 'bg-slate-50 hover:bg-slate-200 text-slate-500 border-slate-200'}`}>
+                                 {uploadTargetId === order.id ? (
+                                     <>
+                                         <svg className="w-3.5 h-3.5 animate-spin shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                         <span>Đang tải...</span>
+                                     </>
+                                 ) : (
+                                     <>
+                                         <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                                         <span>Gắn File</span>
+                                     </>
+                                 )}
+                               </button>
+                           );
+                        })()}
                       </td>
                       <td className="px-2 py-2 text-center">
                         <select
@@ -947,7 +1063,7 @@ export default function OrdersPage() {
             {/* Nội dung cụ thể */}
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-slate-50 min-h-0">
               {/* Cột trái (Thông tin) */}
-              <div className="flex-1 p-6 overflow-y-auto space-y-6">
+              <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Card 1: Người Nhận */}
                   <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
@@ -1016,13 +1132,13 @@ export default function OrdersPage() {
                 </div>
 
                 {/* Card 3: Trạng thái */}
-                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm w-full">
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm w-full shrink-0">
                   <div className="p-4 border-b border-slate-100 bg-slate-50/50">
                     <h3 className="text-lg font-bold text-slate-800">Trạng thái</h3>
                   </div>
-                  <div className="p-5 space-y-4">
-                    <div className="flex items-center justify-between border-b border-dashed border-slate-100 pb-3">
-                      <span className="text-slate-500 text-sm">Trạng thái đơn:</span>
+                  <div className="p-4 space-y-2.5">
+                    <div className="flex items-center justify-between border-b border-dashed border-slate-100 pb-2.5">
+                      <span className="text-slate-500 text-[13px]">Trạng thái đơn:</span>
                       <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-widest border shadow-sm
                              ${(!selectedDetail.Status || selectedDetail.Status === 'Chờ xử lý') ? 'bg-amber-50 text-amber-700 border-amber-200' : ''}
                              ${selectedDetail.Status === 'Đóng kiện' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : ''}
@@ -1032,20 +1148,31 @@ export default function OrdersPage() {
                         {selectedDetail.Status || 'Chờ xử lý'}
                       </span>
                     </div>
-                    <div className="flex flex-col border-b border-dashed border-slate-100 pb-3 gap-2">
-                      <div className="flex items-center justify-between">
-                         <span className="text-slate-500 text-sm">Trạng thái kho:</span>
+                    <div className="flex items-center justify-between border-b border-dashed border-slate-100 pb-2.5">
+                         <span className="text-slate-500 text-[13px]">Trạng thái kho:</span>
                          <span className="px-3 py-1 bg-slate-100 text-slate-700 border border-slate-300 rounded-full text-[11px] font-black uppercase tracking-widest shadow-sm">
                            {selectedDetail.Status || 'Chờ xử lý'}
                          </span>
-                      </div>
-                      {(() => {
+                    </div>
+                    <div className="flex items-center justify-between border-b border-dashed border-slate-100 pb-2.5">
+                      <span className="text-slate-500 text-[13px]">Trạng thái Label:</span>
+                      {selectedDetail.pdfUrl || selectedDetail.pdfBase64 ? (
+                        <span className="px-3 py-1 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-full text-[11px] font-black uppercase tracking-widest shadow-sm">
+                          Đã có nhãn
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 bg-slate-50 text-slate-500 border border-slate-300 rounded-full text-[11px] font-black uppercase tracking-widest shadow-sm">
+                          Chờ ghép
+                        </span>
+                      )}
+                    </div>
+                    {(() => {
                          const foundPkg = packages.find(p => p.orderDescriptions?.includes(selectedDetail.Description || ''));
                          if (foundPkg) {
                              return (
-                                 <div className="flex items-center justify-between mt-1 pt-2 border-t border-dashed border-indigo-100">
-                                    <span className="text-indigo-500 font-medium text-sm flex items-center gap-1.5"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg> Nằm trong kiện:</span>
-                                    <span className="text-sm font-bold font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">{foundPkg.id}</span>
+                                 <div className="flex items-center justify-between pt-1 relative">
+                                    <span className="text-indigo-500 font-medium text-[13px] flex items-center gap-1.5"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg> Nằm trong kiện:</span>
+                                    <span className="text-[11px] font-bold font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">{foundPkg.id}</span>
                              
       {/* Modal Xóa Hàng Loạt */}
       {showBulkDeleteModal && (
@@ -1091,19 +1218,7 @@ ORDER-5678"
 }
                          return null;
                       })()}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 text-sm">Trạng thái Label:</span>
-                      {selectedDetail.pdfUrl || selectedDetail.pdfBase64 ? (
-                        <span className="px-3 py-1 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-full text-[11px] font-black uppercase tracking-widest shadow-sm">
-                          Đã có nhãn
-                        </span>
-                      ) : (
-                        <span className="px-3 py-1 bg-slate-50 text-slate-500 border border-slate-300 rounded-full text-[11px] font-black uppercase tracking-widest shadow-sm">
-                          Chờ ghép nhãn
-                        </span>
-                      )}
-                    </div>
+                    {/* compact status layout rendered */}
                   </div>
                 </div>
               </div>

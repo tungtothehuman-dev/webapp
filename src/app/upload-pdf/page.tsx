@@ -39,7 +39,7 @@ export default function UploadPDFPage() {
       <div className="flex-1 w-full max-w-xl">
           <div className="flex justify-between items-end mb-8">
              <h2 className="text-3xl font-bold text-slate-800">Tải file label PDF</h2>
-             {isProcessing && <span className="text-sm font-medium text-emerald-600 animate-pulse flex items-center gap-2"><div className="w-2 h-2 bg-emerald-500 rounded-full"></div> Đang tiến hành chạy ngầm...</span>}
+             {isProcessing && <span className="text-sm font-medium text-emerald-600 animate-pulse flex items-center gap-2"><div className="w-2 h-2 bg-emerald-500 rounded-full"></div> Đang tiến hành chạy pdf</span>}
           </div>
           
           <div className="mb-6 flex gap-3">
@@ -74,7 +74,7 @@ export default function UploadPDFPage() {
 
             {isProcessing ? (
               <>
-                 <h3 className="text-xl font-bold text-slate-800 mb-2">Đang xử lý ngầm (Background Task)</h3>
+                 <h3 className="text-xl font-bold text-slate-800 mb-2">Đang xử lý file PDF</h3>
                  <p className="text-slate-500 mb-6 font-medium text-sm px-4">
                    Hệ thống đang tự quét và ghép khối lượng lớn tập tin ({processedFiles}/{totalFiles}). Bạn có thể chuyển sang trang khác mà không làm gián đoạn tiến trình.
                  </p>
@@ -84,7 +84,11 @@ export default function UploadPDFPage() {
                     </div>
                  </div>
                  <p className="text-xs font-bold text-amber-600 truncate px-4">{currentFilename}</p>
-                 <button onClick={clearTask} className="mt-4 text-xs font-medium text-slate-400 hover:text-red-500 underline underline-offset-2 hover:bg-slate-50 px-3 py-1 rounded">Xóa bảng hiển thị (Xóa Background Worker)</button>
+                 <div className="mt-8 text-center bg-slate-50 p-4 border border-slate-200 rounded-xl shadow-inner">
+                   <p className="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-green-500 to-blue-600 animate-pulse drop-shadow-sm">
+                       CHỜ CHÚT XONG SẼ CÓ FILE LOG TRẢ VỀ KẾT QUẢ MATCH
+                   </p>
+                 </div>
               </>
             ) : (
               <>

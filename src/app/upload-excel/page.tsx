@@ -23,6 +23,7 @@ export default function UploadExcelPage() {
   const warehouses = useWarehouseStore((state) => state.warehouses);
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState<LogItem[]>([]);
+  const [errorModalContent, setErrorModalContent] = useState<{title: string, messages: string[]} | null>(null);
 
   const addLog = (type: LogType, message: string) => {
       const now = new Date();
@@ -59,23 +60,62 @@ export default function UploadExcelPage() {
 
         addLog('info', `Tìm thấy ${data.length} dòng dữ liệu.`);
         
+        const requiredFields = [
+            "Sender Name", "Sender Address1", "Sender City", "Sender State", "Sender Zipcode",
+            "Receiver Name", "Receiver Address 1", "Receiver City", "Receiver State", "Receiver Zip",
+            "Weight (lbs)", "Length (in)", "Width (in)", "Height (in)", "Description"
+        ];
+
+        // --- KIỂM TRA ĐỊNH DẠNG FILE EXCEL GỐC ---
+        const rawHeaders = xlsx.utils.sheet_to_json(ws, { header: 1 })[0] as string[];
+        const headers = rawHeaders ? rawHeaders.map(h => h ? h.toString().trim() : "") : [];
+        const missingHeaders = requiredFields.filter(f => !headers.includes(f));
+        
+        if (missingHeaders.length > 0) {
+            setErrorModalContent({
+                title: 'TỪ CHỐI TẢI LÊN: SAI CẤU TRÚC FILE EXCEL!',
+                messages: [
+                    'File Excel của bạn không có cấu trúc chuẩn như Biểu mẫu gốc.',
+                    `Phát hiện thiếu ${missingHeaders.length} trường định dạng bắt buộc (ở Dòng 1):`,
+                    ...missingHeaders.map(h => `- Thiếu: [${h}]`),
+                    '',
+                    '💡 Xử lý: Vui lòng nhấp nút "Tải File Mẫu" ở góc trên bên phải để lấy Bảng Excel chuẩn.'
+                ]
+            });
+            addLog('error', `TỪ CHỐI TẢI LÊN: File Excel của bạn không đúng biểu mẫu gốc!`);
+            addLog('error', `Phát hiện thiếu ${missingHeaders.length} cột cấu trúc bắt buộc: [${missingHeaders.join("], [")}]`);
+            addLog('warning', `👉 Vui lòng nhấp nút "Tải File Mẫu" ở góc trên bên phải để lấy Form chuẩn và copy sang.`);
+            setLoading(false);
+            return;
+        }
+
         let validCount = 0;
-        let missingDescRows: number[] = [];
+        let missingFieldErrors: string[] = [];
+        const enrichedData: any[] = [];
 
         const now = new Date();
         const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} ${now.getDate().toString().padStart(2, '0')}/${(now.getMonth()+1).toString().padStart(2, '0')}/${now.getFullYear()}`;
         
-        const enrichedData = data.map((row, index) => {
-            if (!row.Description) {
-                missingDescRows.push(index + 2);
-            } else {
-                validCount++;
-            }
+        data.forEach((row, index) => {
+             const rowNum = index + 2; // Header là dòng 1 trong Excel
+             
+             let missingFields: string[] = [];
+             for (const field of requiredFields) {
+                 if (row[field] == null || row[field].toString().trim() === '') {
+                     missingFields.push(`[${field}]`);
+                 }
+             }
+
+             if (missingFields.length > 0) {
+                 const identifyStr = row.Description ? ` (Mã: ${row.Description})` : (row["Sender Name"] ? ` (Người gửi: ${row["Sender Name"]})` : '');
+                 missingFieldErrors.push(`Dòng ${rowNum}${identifyStr} thiếu: ${missingFields.join(', ')}`);
+                 return; // Nhảy qua dòng này, không nạp vào mây
+             }
+
+             validCount++;
 
             // Tự động phân loại HUB (Trạm nhận) dựa trên thông tin Người gửi trong Excel
             let matchedHub = "";
-            
-            // Lấy dữ liệu tên và ghép chuỗi địa chỉ từ các cột Excel của Sender
             const senderName = (row["Sender Name"] || "").toString().trim().toLowerCase();
             const senderAddressParts = [
                 row["Sender Address1"], 
@@ -85,29 +125,19 @@ export default function UploadExcelPage() {
                 row["Sender Zipcode"], 
                 row["SenderCountry"] || row["Sender Country"]
             ];
-            // Format: "15410 Prairie Oaks Dr Houston TX 77083 US"
-            const senderAddressConcat = senderAddressParts
-                 .filter(Boolean)
-                 .map(p => p?.toString().trim())
-                 .filter(Boolean)
-                 .join(" ")
-                 .toLowerCase();
+            const senderAddressConcat = senderAddressParts.filter(Boolean).map(p => p?.toString().trim()).filter(Boolean).join(" ").toLowerCase();
 
-            // Tìm Kho phù hợp
             for (const wh of warehouses) {
                 const whObj = typeof wh === 'string' ? { id: wh, name: wh, address: "", receiverName: "" } : wh;
                 const whName = (whObj.receiverName || "").toLowerCase().trim();
                 const whAddr = (whObj.address || "").toLowerCase().trim();
 
-                // 1. Nếu kho có định nghĩa tên người nhận và khớp chính xác Tên Sender
                 if (whName && senderName && (senderName === whName || senderName.includes(whName) || whName.includes(senderName))) {
                     matchedHub = whObj.name || whObj.id;
                     break;
                 }
                 
-                // 2. Nếu kho có định nghĩa địa chỉ và địa chỉ sender chứa địa chỉ kho (hoặc ngược lại)
                 if (whAddr && senderAddressConcat) {
-                     // Thay thế dư khoảng trắng để khớp mượt hơn
                      const cleanWhAddr = whAddr.replace(/\s+/g, ' ');
                      const cleanSenderAddr = senderAddressConcat.replace(/\s+/g, ' ');
                      if (cleanSenderAddr.includes(cleanWhAddr) || cleanWhAddr.includes(cleanSenderAddr)) {
@@ -117,23 +147,51 @@ export default function UploadExcelPage() {
                 }
             }
 
-            return { 
+            const newOrder: any = { 
                 ...row, 
-                HUB: matchedHub, // Chèn dữ liệu HUB kho đã nhận diện được
+                HUB: matchedHub,
+                Weight: row["Weight (lbs)"],
+                Length: row["Length (in)"],
+                Width: row["Width (in)"],
+                Height: row["Height (in)"],
                 UploadDate: timeString,
+                createdAt: Date.now() - index, // Đánh mốc thời gian chính xác để giữ đúng thứ tự Excel
                 ActionHistory: [{
                     action: 'Nạp dữ liệu vào máy chủ lưu trữ' + (matchedHub ? ` (Kho: ${matchedHub})` : ''),
                     user: 'Hệ thống Admin',
-                    timestamp: timeString
+                    timestamp: new Date().toISOString()
                 }]
             };
+
+            delete newOrder["Weight (lbs)"];
+            delete newOrder["Length (in)"];
+            delete newOrder["Width (in)"];
+            delete newOrder["Height (in)"];
+
+            enrichedData.push(newOrder);
         });
 
-        if (missingDescRows.length > 0) {
-            const rowListStr = missingDescRows.length > 10 
-                 ? missingDescRows.slice(0, 10).join(', ') + ` và ${missingDescRows.length - 10} dòng khác`
-                 : missingDescRows.join(', ');
-            addLog('warning', `Cảnh báo: Có ${missingDescRows.length} dòng không có "Description" (Mã Đơn) tại dòng Excel số: ${rowListStr}. Sẽ gây khó ghép file PDF.`);
+        if (missingFieldErrors.length > 0) {
+            setErrorModalContent({
+                title: `PHÁT HIỆN LỖI THIẾU TRƯỜNG DỮ LIỆU (${missingFieldErrors.length} ĐƠN)`,
+                messages: [
+                    `Nằm ở trong File: [${file.name}]`,
+                    '👉 Yêu cầu: Tất cả các dòng đơn hàng đều phải có đầy đủ các trường (Sender, Receiver, Weight, Length...).',
+                    '',
+                    `Chi tiết ${missingFieldErrors.length} dòng bị lõi:`,
+                    ...missingFieldErrors.slice(0, 15),
+                    ...(missingFieldErrors.length > 15 ? [`... và ${missingFieldErrors.length - 15} dòng khác cũng bị lỗi.`] : []),
+                    '',
+                    '💡 Xử lý: Xin vui lòng bổ sung thông tin vào Excel trên máy tính của bạn và nhấp chọn Tải lên lại.'
+                ]
+            });
+            addLog('error', `TỪ CHỐI ${missingFieldErrors.length} dòng ở trong File [${file.name}] vì THIẾU DỮ LIỆU BẮT BUỘC (Đã bỏ qua các dòng này):`);
+            for (let i = 0; i < Math.min(missingFieldErrors.length, 15); i++) {
+                 addLog('error', `- ${missingFieldErrors[i]}`);
+            }
+            if (missingFieldErrors.length > 15) {
+                 addLog('error', `... và ${missingFieldErrors.length - 15} dòng khác cũng bị từ chối.`);
+            }
         }
 
         // --- LÕI AI: CHỐNG TRÙNG LẶP ĐƠN HÀNG (DEDUPLICATION) ---
@@ -169,7 +227,7 @@ export default function UploadExcelPage() {
         }
 
         if (uniqueNewData.length === 0) {
-             addLog('success', `Tất cả các đơn trong File này đều đã nằm trên hệ thống. Không có đơn mới nào được thêm.`);
+             addLog('warning', `PHÁT HIỆN TRÙNG LẶP TOÀN BỘ: Tất cả các đơn trong File [${file.name}] đều đã nằm trên hệ thống. Thao tác tải lên bị đóng!`);
              setLoading(false);
              return;
         }
@@ -190,10 +248,10 @@ export default function UploadExcelPage() {
             });
             await batch.commit();
             processed += chunk.length;
-            addLog('info', `Đã đồng bộ ${processed}/${enrichedData.length} đơn...`);
+            addLog('info', `Đã đồng bộ ${processed}/${uniqueNewData.length} đơn...`);
         }
 
-        addLog('success', `Đã lưu trữ thành công ${processed} đơn hàng lên không gian Đám Mây của THE-HUB!`);
+        addLog('success', `Đã lưu trữ thành công ${processed} đơn hàng từ File [${file.name}] lên THE-HUB!`);
         
       } catch (error: any) {
         addLog('error', `Lỗi khi lưu lên mây: ${error.message}`);
@@ -208,7 +266,7 @@ export default function UploadExcelPage() {
     const templateHeaders = [
       "Sender Name", "Sender Company", "Sender Address1", "Sender Address2", "Sender City", "Sender State", "Sender Zipcode", "Sender Phone",
       "Receiver Name", "Receiver Company", "Receiver Address 1", "Receiver Address 2", "Receiver City", "Receiver State", "Receiver Zip", "Receiver Phone",
-      "Weight", "Length", "Width", "Height", "Description", "Reference1", "Reference2", "SenderCountry", "ReceiverCountry", "TRACKING"
+      "Weight (lbs)", "Length (in)", "Width (in)", "Height (in)", "Description", "Reference1", "Reference2", "SenderCountry", "ReceiverCountry", "TRACKING"
     ];
     
     const sampleData = [{
@@ -224,10 +282,10 @@ export default function UploadExcelPage() {
         "Receiver State": "SC",
         "Receiver Zip": 29577,
         "ReceiverCountry": "US",
-        "Weight": 2.6,
-        "Length": 3.9,
-        "Width": 3.9,
-        "Height": 3.9,
+        "Weight (lbs)": 2.6,
+        "Length (in)": 3.9,
+        "Width (in)": 3.9,
+        "Height (in)": 3.9,
         "Description": "T3.209"
     }];
 
@@ -319,6 +377,35 @@ export default function UploadExcelPage() {
               )}
           </div>
       </div>
+
+      {errorModalContent && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden border border-red-100 animate-in fade-in zoom-in duration-200">
+               <div className="bg-red-50 px-6 py-4 border-b border-red-100 flex items-center justify-between">
+                   <div className="flex items-center gap-3 text-red-600">
+                       <svg className="w-6 h-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                       <h3 className="font-bold text-lg">{errorModalContent.title}</h3>
+                   </div>
+                   <button onClick={() => setErrorModalContent(null)} className="text-red-400 hover:text-red-600 hover:bg-red-100 p-1.5 rounded-lg transition-colors">
+                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                   </button>
+               </div>
+               <div className="p-6 bg-white overflow-y-auto max-h-[60vh] custom-scrollbar">
+                   {errorModalContent.messages.map((msg, i) => (
+                       <div key={i} className={`text-sm ${msg.startsWith('👉') || msg.startsWith('💡') ? 'text-indigo-600 font-bold mt-4' : (msg.startsWith('-') ? 'text-red-500 font-medium ml-4 list-item list-inside' : 'text-slate-700')} ${msg === '' ? 'h-2' : 'mb-1'}`}>
+                           {msg}
+                       </div>
+                   ))}
+               </div>
+               <div className="p-5 border-t bg-slate-50 flex justify-end gap-3">
+                   <button onClick={() => setErrorModalContent(null)} className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl shadow-sm transition-all text-sm">
+                       Đã Hiểu
+                   </button>
+               </div>
+           </div>
+        </div>
+      )}
+
     </div>
   );
 }

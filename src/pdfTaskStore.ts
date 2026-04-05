@@ -7,9 +7,24 @@ import { ref, uploadBytes, uploadBytesResumable, getDownloadURL } from 'firebase
 import { BrowserMultiFormatReader } from '@zxing/library';
 import { distance } from 'fastest-levenshtein';
 
-if (typeof window !== "undefined" && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+if (typeof window !== "undefined") {
     pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 }
+
+// THUẬT TOÁN FUZZY MATCH (KHOẢNG CÁCH MỜ) CHO TÊN VÀ ĐỊA CHỈ TỪ OCR
+const fuzzyMatch = (target: string, text: string) => {
+    if (!target || target.length < 4) return text.includes(target);
+    if (text.includes(target)) return true;
+    
+    const maxErrors = Math.floor(target.length / 5) + 1; // Tolerance: 1 lỗi / 5 kí tự
+    
+    for (let i = 0; i <= text.length - target.length; i++) {
+        if (distance(target, text.substring(i, i + target.length)) <= maxErrors) return true;
+        if (distance(target, text.substring(i, i + target.length + 1)) <= maxErrors) return true;
+        if (distance(target, text.substring(i, i + target.length - 1)) <= maxErrors) return true;
+    }
+    return false;
+};
 
 export type LogType = 'success' | 'error' | 'warning' | 'info';
 
@@ -103,7 +118,7 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                     let rawPdfText = textContent.items.map((item: any) => item.str).join(" ");
 
                     // Bước 2: Chỉ khi file là ảnh chết (Scanned Label) mới phải gọi AI OCR
-                    if (rawPdfText.length < 20) {
+                    if (rawPdfText.length < 30) {
                         canvas.height = viewport.height;
                         canvas.width = viewport.width;
                         await page.render({ canvasContext: ctx, viewport: viewport }).promise;
@@ -111,7 +126,8 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                         try {
                             const codeReader = new BrowserMultiFormatReader();
                             const result = await codeReader.decodeFromImageUrl(canvas.toDataURL("image/png"));
-                            barcodeText = result.getText().toUpperCase();
+                            let rawBarcode = result.getText().toUpperCase();
+                            barcodeText = rawBarcode.length > 22 ? rawBarcode.slice(-22) : rawBarcode;
                         } catch (e) { }
 
                         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -159,17 +175,30 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
 
                     let matchedIndex = -1;
                     let bestScore = 0;
-
-                    // Tên file đã lọc đuôi để chống cháy
-                    const cleanFilename = file.name.replace(/\.[^/.]+$/, "").toUpperCase();
+                    let isAlreadyFulfilled = false;
+                    let bestFailReason = "";
 
                     for (let j = 0; j < orders.length; j++) {
                         const order = orders[j];
+                        
+                        // Kiểm tra trinh sát: Nếu có dấu hiệu khớp File nhưng đơn đã đóng
+                        const description = (order["Description"] || "").toString().trim();
+                        const descUpper = description.toUpperCase();
+                        const descClean = descUpper.replace(/[\s\-_,\.]/g, "");
+                        
+                        if (descUpper.length > 2) {
+                            if (file.name.toUpperCase().includes(descUpper) || pdfClean.includes(descClean)) {
+                                if (order.pdfUrl || order.Status === 'Đã Hủy' || order.Status === 'Đóng kiện' || order.Status === 'Kho Mỹ đã scan') {
+                                    isAlreadyFulfilled = true;
+                                }
+                            }
+                        }
+
                         if (order.pdfUrl || order.Status === 'Đã Hủy' || order.Status === 'Đóng kiện' || order.Status === 'Kho Mỹ đã scan') continue;
 
-                        const description = (order["Description"] || "").toString().toUpperCase();
+                        const desc = (order["Description"] || "").toString().toUpperCase();
                         const trackingNumber = (order["TrackingNumber"] || "").toString().toUpperCase();
-                        const descClean = description.replace(/[\s\-_,\.]/g, '');
+                        const dClean = desc.replace(/[\s\-_,\.]/g, '');
 
                         const nameStr = (order["Receiver Name"] || "").toString().toUpperCase();
                         const nameClean = nameStr.replace(/[\s\-_,\.]/g, '');
@@ -177,43 +206,106 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                         let score = 0;
 
                         // 1. Quét Mã Barcode (Ưu tiên tuyệt đối)
-                        if (barcodeText && (barcodeText.includes(description) || (trackingNumber && barcodeText.includes(trackingNumber)))) {
+                        if (barcodeText && (barcodeText.includes(desc) || (trackingNumber && barcodeText.includes(trackingNumber)))) {
                             score += 100;
                         }
 
                         // 2. Chấm điểm Y XÌ ĐÚC Mã Description (Bắt buộc phải có)
-                        if (descClean.length > 2 && (cleanFilename === descClean || cleanFilename.includes(descClean))) { score += 1000; } else if (descClean.length > 2 && pdfClean.includes(descClean)) {
-                            score += 1000;
-                        }
+                        let isDescMatch = false;
 
-                        // 3. Chấm điểm Y XÌ ĐÚC Tên trong văn bản ảnh
-                        const addressStr = (order["Receiver Address 1"] || "").toString().toUpperCase(); const addressClean = addressStr.replace(/[\s\-_,\.]/g, ""); if (addressClean.length > 5 && pdfClean.includes(addressClean)) { score += 1000; } if (nameClean.length > 2 && pdfClean.includes(nameClean)) {
+                        if (desc.length > 2) {
+                            const upperFileName = file.name.toUpperCase();
+                            if (upperFileName.includes(desc)) {
+                                isDescMatch = true;
+                            } else if (pdfClean.includes(dClean)) {
+                                isDescMatch = true;
+                            }
+                        }
+                        if (isDescMatch) { score += 1000; }
+
+                        // 3. Chấm điểm Tên và Địa chỉ (Dùng FUZZY MATCH để chống lỗi từ OCR)
+                        const addressStr = (order["Receiver Address 1"] || "").toString().toUpperCase(); 
+                        const addressClean = addressStr.replace(/[\s\-_,\.]/g, ""); 
+                        let addrMatch = false;
+                        let nmMatch = false;
+
+                        if (addressClean.length > 5 && fuzzyMatch(addressClean, pdfClean)) { 
+                            score += 1000; 
+                            addrMatch = true;
+                        } 
+                        if (nameClean.length > 2 && fuzzyMatch(nameClean, pdfClean)) {
                             score += 1000;
+                            nmMatch = true;
                         }
 
                         if (score > bestScore) {
                             bestScore = score;
                             matchedIndex = j;
+                            const isNameAddrMatched = (addrMatch || nmMatch);
+                            
+                            if (isDescMatch && !isNameAddrMatched) {
+                                bestFailReason = `Đã khớp Mã Đơn (${desc}) nhưng LỆCH TÊN NGƯỜI NHẬN / ĐỊA CHỈ`;
+                            } else if (!isDescMatch && isNameAddrMatched) {
+                                bestFailReason = `Đã khớp đúng Tên/Địa chỉ nhưng KHÔNG TÌM THẤY MÃ ĐƠN (${desc})`;
+                            } else {
+                                bestFailReason = `Hệ thống phân tích không đủ độ tin cậy.`;
+                            }
                         }
                     }
 
+                    let finalTracking = barcodeText;
+                    
+                    if (!finalTracking) {
+                         const uspsMatch = pdfClean.match(/(?:420\d{5})?(9\d{21})/);
+                         const upsMatch = pdfClean.match(/1Z[A-Z0-9]{16}/i);
+                         if (uspsMatch && uspsMatch[1]) {
+                             finalTracking = uspsMatch[1];
+                         } else if (upsMatch) {
+                             finalTracking = upsMatch[0].toUpperCase();
+                         }
+                    }
+
+                    if (!finalTracking) {
+                         const defaultTracking = file.name.replace(/\.pdf$/i, "").toUpperCase();
+                         const trackingClean = defaultTracking.replace(/\s/g, "");
+                         const fnUsps = trackingClean.match(/(?:420\d{5})?(9\d{21})/);
+                         const fnUps = trackingClean.match(/1Z[A-Z0-9]{16}/i);
+                         const tenDigitsMatch = defaultTracking.match(/(?:^|\s)([\d]{10,22})(?:\s|$)/);
+
+                         if (fnUsps && fnUsps[1]) {
+                             finalTracking = fnUsps[1];
+                         } else if (fnUps) {
+                             finalTracking = fnUps[0].toUpperCase();
+                         } else if (tenDigitsMatch && tenDigitsMatch[1]) {
+                             finalTracking = tenDigitsMatch[1];
+                         } else {
+                             finalTracking = defaultTracking;
+                         }
+                    }
+
                     // TỐI QUAN TRỌNG: Ngưỡng khắt khe 2000 điểm (SONG SONG 2 YẾU TỐ BẮT BUỘC)
-                    // BẮT BUỘC phải thoả mãn CÙNG LÚC Mã Description (1000đ) VÀ Tên Người Nhận (1000đ)
                     if (matchedIndex !== -1 && bestScore >= 2000) {
                         mapData[file.name] = {
                             orderId: orders[matchedIndex].id,
                             description: orders[matchedIndex]["Description"],
-                            trackingNumber: barcodeText || file.name.replace(/\.pdf$/i, "")
+                            trackingNumber: finalTracking
                         };
                         matchCount++;
                         addLog('success', `File "${file.name}": [${orders[matchedIndex]["Description"]}]. Lọc song song hoàn hảo Tên/Địa chỉ + Mã (${bestScore} điểm).`);
+                    } else if (isAlreadyFulfilled) {
+                        fileResults.push({
+                            "Tên File PDF": file.name,
+                            "Trạng thái": "Thất bại",
+                            "Nguyên nhân": "Đơn hàng này ĐÃ ĐƯỢC GHÉP hoặc ĐÃ ĐÓNG KIỆN từ trước."
+                        });
+                        addLog('warning', `File "${file.name}": Đơn hàng này ĐÃ ĐƯỢC GHÉP hoăc ĐÃ ĐÓNG KIỆN từ trước (Bỏ qua).`);
                     } else if (matchedIndex !== -1 && bestScore > 0) {
                         fileResults.push({
                             "Tên File PDF": file.name,
                             "Trạng thái": "Thất bại",
-                            "Nguyên nhân": `Điểm AI quá thấp (${bestScore} điểm). Không đủ tiêu chuẩn ghép (Tên/Địa chỉ không khớp).`
+                            "Nguyên nhân": `AI từ chối: ${bestFailReason}`
                         });
-                        addLog('warning', `File "${file.name}": AI từ chối. File có vẻ rập khuôn nhưng KHÔNG CHUẨN XÁC NGUYÊN BẢN (Gạt bỏ).`);
+                        addLog('warning', `File "${file.name}": TỪ CHỐI GHÉP: ${bestFailReason} (Chỉ đạt ${bestScore}/2000đ)`);
                     } else {
                         fileResults.push({
                             "Tên File PDF": file.name,
@@ -280,11 +372,7 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                         return result.secure_url;
                     };
 
-                    const timeoutPromise = new Promise<string>((_, reject) =>
-                        setTimeout(() => reject(new Error("Quá thời gian 30s. Mạng chập chờn hoặc Firebase từ chối.")), 30000)
-                    );
-
-                    const pdfUrl = await Promise.race([uploadPromise(), timeoutPromise]);
+                    const pdfUrl = await uploadPromise();
 
                     addLog('info', `[${fname}] Đập thẳng dữ liệu vào Firestore...`);
                     const orderRef = doc(db, 'orders', matchRow.orderId);
