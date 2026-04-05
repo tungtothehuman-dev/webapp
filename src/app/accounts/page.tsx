@@ -4,7 +4,7 @@ import { useAuthStore, UserAccount } from "@/authStore";
 import { db } from "@/firebase";
 import { collection, doc, onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { Shield, ShieldAlert, Key, Trash2, PlusCircle, Edit2 } from "lucide-react";
+import { Shield, ShieldAlert, Key, Trash2, PlusCircle, Edit2, Headset } from "lucide-react";
 
 export default function AccountsPage() {
     const { currentUser } = useAuthStore();
@@ -15,7 +15,7 @@ export default function AccountsPage() {
     const [id, setId] = useState("");
     const [password, setPassword] = useState("");
     const [displayName, setDisplayName] = useState("");
-    const [role, setRole] = useState<'admin' | 'warehouse'>('warehouse');
+    const [role, setRole] = useState<'admin' | 'warehouse' | 'support'>('warehouse');
     const [isEditing, setIsEditing] = useState(false);
 
     useEffect(() => {
@@ -150,6 +150,7 @@ export default function AccountsPage() {
                                 className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-teal-400 focus:bg-white focus:outline-none transition-colors font-bold"
                             >
                                 <option value="warehouse">Trạm Kho (Warehouse)</option>
+                                <option value="support">Chăm Sóc Khách Hàng (Support)</option>
                                 <option value="admin">Quản Trị Viên (Admin)</option>
                             </select>
                         </div>
@@ -168,13 +169,13 @@ export default function AccountsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
                 {accounts.map(acc => (
                     <div key={acc.id} className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xl shadow-slate-200/40 relative group overflow-hidden transition-all hover:border-teal-200 hover:shadow-teal-100/50">
-                        <div className={`absolute top-0 left-0 w-1 h-full ${acc.role === 'admin' ? 'bg-teal-500' : 'bg-amber-500'}`}></div>
+                        <div className={`absolute top-0 left-0 w-1 h-full ${acc.role === 'admin' ? 'bg-teal-500' : acc.role === 'support' ? 'bg-indigo-500' : 'bg-amber-500'}`}></div>
                         
                         <div className="flex justify-between items-start mb-6">
                             <div>
-                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 ${acc.role === 'admin' ? 'bg-teal-50 text-teal-700' : 'bg-amber-50 text-amber-700'}`}>
-                                    {acc.role === 'admin' ? <Shield className="w-3.5 h-3.5" /> : <ShieldAlert className="w-3.5 h-3.5" />}
-                                    {acc.role}
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 ${acc.role === 'admin' ? 'bg-teal-50 text-teal-700' : acc.role === 'support' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'}`}>
+                                    {acc.role === 'admin' ? <Shield className="w-3.5 h-3.5" /> : acc.role === 'support' ? <Headset className="w-3.5 h-3.5" /> : <ShieldAlert className="w-3.5 h-3.5" />}
+                                    {acc.role === 'support' ? 'Support' : acc.role}
                                 </span>
                                 <h3 className="text-xl font-bold text-slate-800">{acc.displayName}</h3>
                                 <p className="text-slate-500 text-sm font-medium mt-1">ID: <span className="text-slate-700">{acc.id}</span></p>

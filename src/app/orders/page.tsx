@@ -1,6 +1,6 @@
 "use client";
 
-import { useOrderStore, OrderRow, usePackageStore } from '@/store';
+import { useOrderStore, OrderRow, usePackageStore, useWarehouseStore } from '@/store';
 import { useAuthStore } from '@/authStore';
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
@@ -16,11 +16,14 @@ export default function OrdersPage() {
   const clearOrders = useOrderStore((state) => state.clearOrders);
   const updateOrder = useOrderStore((state) => state.updateOrder);
   const packages = usePackageStore((state) => state.packages);
+  const warehouses = useWarehouseStore((state) => state.warehouses);
   const { currentUser } = useAuthStore();
 
   const [selectedIndexes, setSelectedIndexes] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [hubFilter, setHubFilter] = useState('ALL');
+  const [dateFilter, setDateFilter] = useState("");
   const [selectedDetail, setSelectedDetail] = useState<OrderRow | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -31,6 +34,12 @@ export default function OrdersPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTargetId, setUploadTargetId] = useState<string | null>(null);
+  const [toastMsg, setToastMsg] = useState<{title: string, type: 'success' | 'error'} | null>(null);
+
+  const showToast = (title: string, type: 'success' | 'error') => {
+      setToastMsg({ title, type });
+      setTimeout(() => setToastMsg(null), 3000);
+  };
 
   const handleManualUploadClick = (id: string) => {
       setUploadTargetId(id);
@@ -44,17 +53,35 @@ export default function OrdersPage() {
       if (!uploadTargetId || !e.target.files || e.target.files.length === 0) return;
       const file = e.target.files[0];
       
-      const trackingInput = window.prompt("Nhập mã Tracking Number (Trống nếu không có):", file.name.replace(/\.pdf$/i, ""));
-      if (trackingInput === null) return; // Users cancelled
+      const defaultTracking = file.name.replace(/\.pdf$/i, "").toUpperCase();
+      const trackingInput = window.prompt("Hãy kiểm tra và xác nhận Tracking Number cho file này:", defaultTracking);
+      
+      if (trackingInput === null) {
+          setUploadTargetId(null);
+          return;
+      }
       
       try {
-          const { db, storage } = await import('@/firebase');
+          const { db } = await import('@/firebase');
           const { doc, updateDoc } = await import('firebase/firestore');
-          const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
 
-          const storageRef = ref(storage, `pdfs/${uploadTargetId}.pdf`);
-          await uploadBytes(storageRef, file);
-          const pdfUrl = await getDownloadURL(storageRef);
+          const formData = new FormData();
+          formData.append("file", file, `${trackingInput}.pdf`);
+          formData.append("upload_preset", "THE HUB");
+          formData.append("public_id", uploadTargetId);
+
+          const response = await fetch("https://api.cloudinary.com/v1_1/dyjtyeokk/image/upload", {
+              method: "POST",
+              body: formData
+          });
+
+          if (!response.ok) {
+              const errText = await response.text();
+              throw new Error("Cloudinary Error: " + errText);
+          }
+
+          const result = await response.json();
+          const pdfUrl = result.secure_url;
 
           const orderRef = doc(db, 'orders', uploadTargetId);
           const targetOrder = orders.find(o => o.id === uploadTargetId);
@@ -62,16 +89,21 @@ export default function OrdersPage() {
           await updateDoc(orderRef, {
               TrackingNumber: trackingInput,
               pdfUrl: pdfUrl,
-              Status: 'Kho Mỹ đã scan', // tự update nếu đã ghép
               ActionHistory: [...(targetOrder?.ActionHistory || []), {
                   action: `Ghép tay PDF: ${trackingInput}`,
                   user: currentUser?.displayName || 'Ẩn danh',
                   timestamp: new Date().toLocaleString()
               }]
           });
-          alert('Đã tải lên và gán PDF thủ công thành công!');
+          
+          updateOrder(uploadTargetId, {
+              TrackingNumber: trackingInput,
+              pdfUrl: pdfUrl,
+          }); // Update local store
+          
+          showToast('Đã tải lên và gắn thủ công thành công!', 'success');
       } catch (err: any) {
-          alert('Lỗi ghép bằng tay: ' + err.message);
+          showToast('Lỗi ghép bằng tay: ' + err.message, 'error');
       } finally {
           setUploadTargetId(null);
       }
@@ -96,9 +128,14 @@ export default function OrdersPage() {
 
     const newLog = {
       action: `Chuyển trạng thái: ${newStatus}`,
-      user: currentUser ? currentUser.displayName : "Người ẩn danh",
+      user: currentUser ? `${currentUser.displayName || currentUser.id} (${currentUser.role})` : "Người ẩn danh",
       timestamp: timeString
     };
+
+    updateOrder(id, {
+        Status: newStatus,
+        ActionHistory: [...(order.ActionHistory || []), newLog]
+    });
 
     import('@/firebase').then(({ db }) => {
       import('firebase/firestore').then(({ doc, updateDoc }) => {
@@ -111,7 +148,7 @@ export default function OrdersPage() {
     });
   };
 
-  const downloadBarcodeAsPdf = async (description: string, receiverName: string) => {
+  const downloadBarcodeAsPdf = async (description: string, receiverName: string, hub: string) => {
     try {
       const A7_WIDTH = 210;
       const A7_HEIGHT = 298;
@@ -125,8 +162,10 @@ export default function OrdersPage() {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      const safeBarcodeData = description.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, 'd').replace(/Đ/g, 'D');
+
       const tempCanvas = document.createElement("canvas");
-      JsBarcode(tempCanvas, description, {
+      JsBarcode(tempCanvas, safeBarcodeData, {
         text: description,
         width: 4,
         height: 350,
@@ -154,6 +193,13 @@ export default function OrdersPage() {
       ctx.textAlign = "center";
 
       ctx.fillText(receiverName, canvas.width / 2, bcY + bcHeight + 120, maxBcWidth);
+      
+      if (hub && hub !== '-') {
+          const cleanHub = hub.replace(/HUB/gi, '').trim();
+          ctx.font = "bold 50px Arial, sans-serif";
+          ctx.fillStyle = "#333333";
+          ctx.fillText(cleanHub, canvas.width / 2, bcY + bcHeight + 210, maxBcWidth);
+      }
 
       const imgDataUrl = canvas.toDataURL("image/png");
 
@@ -185,12 +231,60 @@ export default function OrdersPage() {
       if (currentStatus !== statusFilter) return false;
     }
 
+    if (hubFilter !== 'ALL') {
+      const currentHub = item.HUB || item.Hub || '';
+      if (hubFilter === 'NO_HUB') {
+          if (currentHub) return false;
+      } else {
+          if (currentHub !== hubFilter) return false;
+      }
+    }
+
+    if (dateFilter) {
+      if (!item.UploadDate) return false;
+      const [y, m, d] = dateFilter.split("-");
+      const dmy = `${d}/${m}/${y}`;
+      const dmyShort = `${parseInt(d, 10)}/${parseInt(m, 10)}/${y}`;
+      if (!item.UploadDate.includes(dateFilter) && !item.UploadDate.includes(dmy) && !item.UploadDate.includes(dmyShort)) {
+        return false;
+      }
+    }
+
     if (!searchQuery) return true;
+    
+    // Auto-fix lỗi kẹt Unikey/Vietkey (ví dụ: US -> Ú, IS -> Í, DD -> Đ) để tra cứu
+    const decodeTelex = (str: string) => {
+        return str
+            .replace(/ú/g, 'us').replace(/Ú/g, 'US')
+            .replace(/í/g, 'is').replace(/Í/g, 'IS')
+            .replace(/á/g, 'as').replace(/Á/g, 'AS')
+            .replace(/é/g, 'es').replace(/É/g, 'ES')
+            .replace(/ó/g, 'os').replace(/Ó/g, 'OS')
+            .replace(/ý/g, 'ys').replace(/Ý/g, 'YS')
+            .replace(/đ/g, 'dd').replace(/Đ/g, 'DD')
+            .replace(/ư/g, 'uw').replace(/Ư/g, 'UW')
+            .replace(/ơ/g, 'ow').replace(/Ơ/g, 'OW')
+            .replace(/ô/g, 'oo').replace(/Ô/g, 'OO')
+            .replace(/ê/g, 'ee').replace(/Ê/g, 'EE')
+            .replace(/ă/g, 'aw').replace(/Ă/g, 'AW')
+            .replace(/â/g, 'aa').replace(/Â/g, 'AA');
+    };
+
     const q = searchQuery.toLowerCase();
+    const cleanQ = decodeTelex(searchQuery).toLowerCase();
+    
+    // Xoá dấu tiếng việt để so sánh tương đối chống rớt đơn
+    const removeAccents = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+    const qNoAccent = removeAccents(q);
+    const cleanNoAccent = removeAccents(cleanQ);
+
     return (
-      (item.TrackingNumber || '').toLowerCase().includes(q) ||
-      (item.Description || '').toLowerCase().includes(q) ||
-      (item["Receiver Name"] || '').toLowerCase().includes(q)
+      removeAccents(item.TrackingNumber || '').includes(qNoAccent) ||
+      removeAccents(item.Description || '').includes(qNoAccent) ||
+      removeAccents(item["Receiver Name"] || '').includes(qNoAccent) ||
+      removeAccents(item.TrackingNumber || '').includes(cleanNoAccent) ||
+      removeAccents(item.Description || '').includes(cleanNoAccent) ||
+      removeAccents(item["Receiver Name"] || '').includes(cleanNoAccent)
     );
   });
 
@@ -216,6 +310,34 @@ export default function OrdersPage() {
       newSet.delete(index);
     }
     setSelectedIndexes(newSet);
+  };
+
+  const downloadSelectedLabels = async () => {
+    const selectedOrders = orders.filter((_, idx) => selectedIndexes.has(idx)).filter(o => o.pdfUrl);
+    if (selectedOrders.length === 0) {
+      alert("Không có Label PDF nào trong các đơn hàng đã chọn.");
+      return;
+    }
+    
+    try {
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      
+      for (const o of selectedOrders) {
+          const res = await fetch(o.pdfUrl!);
+          if (res.ok) {
+              const fileBuffer = await res.arrayBuffer();
+              const fileName = `[${o.Description || 'KhongMa'}] - ${o.TrackingNumber || 'KhongTracking'}.pdf`;
+              zip.file(fileName, fileBuffer);
+          }
+      }
+      
+      const zipContent = await zip.generateAsync({ type: 'blob' });
+      saveAs(zipContent, `Labels_THE_HUB_${new Date().getTime()}.zip`);
+      
+    } catch(e: any) {
+        alert("Lỗi khi tải/nén Label: " + e.message);
+    }
   };
 
   const exportExcel = () => {
@@ -297,8 +419,9 @@ export default function OrdersPage() {
 
     setIsDeletingAll(true);
     try {
-        const { db } = await import('@/firebase');
+        const { db, storage } = await import('@/firebase');
         const { doc, writeBatch } = await import('firebase/firestore');
+        const { ref, deleteObject } = await import('firebase/storage');
 
         const selectedOrders = orders.filter((_, idx) => selectedIndexes.has(idx));
         
@@ -308,6 +431,10 @@ export default function OrdersPage() {
 
         for (const order of selectedOrders) {
             batch.delete(doc(db, 'orders', order.id));
+            if (order.pdfUrl) {
+                const pdfRef = ref(storage, `pdfs/${order.id}.pdf`);
+                deleteObject(pdfRef).catch(e => console.warn("Không thể xóa file PDF (có thể file bị lỗi hoặc không tồn tại):", e));
+            }
             count++;
             if (count % MAX_BATCH_SIZE === 0) {
                 await batch.commit();
@@ -347,8 +474,9 @@ export default function OrdersPage() {
       setIsDeletingAll(true);
       setShowBulkDeleteModal(false);
       try {
-          const { db } = await import('@/firebase');
+          const { db, storage } = await import('@/firebase');
           const { doc, writeBatch } = await import('firebase/firestore');
+          const { ref, deleteObject } = await import('firebase/storage');
           
           let count = 0;
           let batch = writeBatch(db);
@@ -360,6 +488,10 @@ export default function OrdersPage() {
               if (descriptions.includes(desc)) {
                   idsToDelete.add(order.id);
                   batch.delete(doc(db, 'orders', order.id));
+                  if (order.pdfUrl) {
+                      const pdfRef = ref(storage, `pdfs/${order.id}.pdf`);
+                      deleteObject(pdfRef).catch(e => console.warn("Không thể xóa file PDF:", e));
+                  }
                   count++;
                   currentBatchSize++;
 
@@ -410,19 +542,26 @@ export default function OrdersPage() {
                 Xuất Excel ({selectedIndexes.size})
               </button>
               
+              {currentUser?.role === 'admin' && (
+                  <button 
+                      onClick={() => selectedIndexes.size > 0 ? handleDeleteSelected() : setShowBulkDeleteModal(true)} 
+                      disabled={isDeletingAll}
+                      className="px-4 py-2 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white rounded-lg text-sm font-bold uppercase transition-all shadow-sm flex items-center gap-2 border border-red-200 disabled:opacity-50 min-w-[190px] justify-center">
+                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                     {isDeletingAll ? "Đang xóa Cloud..." 
+                       : (selectedIndexes.size > 0 ? `Xóa ${selectedIndexes.size} Đã Chọn` : "Xóa Hàng Loạt")}
+                  </button>
+              )}
               <button 
-                  onClick={() => selectedIndexes.size > 0 ? handleDeleteSelected() : setShowBulkDeleteModal(true)} 
-                  disabled={isDeletingAll}
-                  className="px-4 py-2 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white rounded-lg text-sm font-bold uppercase transition-all shadow-sm flex items-center gap-2 border border-red-200 disabled:opacity-50 min-w-[190px] justify-center">
-                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                 {isDeletingAll ? "Đang xóa Cloud..." 
-                   : (selectedIndexes.size > 0 ? `Xóa ${selectedIndexes.size} Đã Chọn` : "Xóa Hàng Loạt")}
+                  onClick={downloadSelectedLabels}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition-all shadow-md flex items-center gap-2 border border-emerald-500/50"
+                  title="Tải xuống toàn bộ PDF trong 1 file ZIP nén"
+              >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                  Tải Label ({selectedIndexes.size})
               </button>
             </>
           )}
-          <Link href="/upload-excel" className="px-4 py-2 bg-white rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition shadow-sm">
-            Tải lên file Excel khác
-          </Link>
         </div>
       </div>
 
@@ -438,17 +577,33 @@ export default function OrdersPage() {
         </div>
       ) : (
         <div className="bg-white shadow-sm border border-slate-200 rounded-2xl overflow-hidden">
-          <div className="p-4 border-b border-slate-200 bg-white flex justify-between items-center flex-wrap gap-4">
+          <div className="p-4 border-b border-slate-200 bg-white flex flex-col md:flex-row gap-4">
 
-
-            <div className="relative w-full border-2 border-indigo-400 bg-white rounded-xl overflow-hidden shadow-sm transition-all focus-within:border-indigo-600 outline-none">
+            <div className="relative flex-1 border-2 border-indigo-400 bg-white rounded-xl overflow-hidden shadow-sm transition-all focus-within:border-indigo-600 outline-none">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
               </div>
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                    const rawVal = e.target.value;
+                    const cleanVal = rawVal
+                        .replace(/ú/g, 'us').replace(/Ú/g, 'US')
+                        .replace(/í/g, 'is').replace(/Í/g, 'IS')
+                        .replace(/á/g, 'as').replace(/Á/g, 'AS')
+                        .replace(/é/g, 'es').replace(/É/g, 'ES')
+                        .replace(/ó/g, 'os').replace(/Ó/g, 'OS')
+                        .replace(/ý/g, 'ys').replace(/Ý/g, 'YS')
+                        .replace(/đ/g, 'dd').replace(/Đ/g, 'DD')
+                        .replace(/ư/g, 'uw').replace(/Ư/g, 'UW')
+                        .replace(/ơ/g, 'ow').replace(/Ơ/g, 'OW')
+                        .replace(/ô/g, 'oo').replace(/Ô/g, 'OO')
+                        .replace(/ê/g, 'ee').replace(/Ê/g, 'EE')
+                        .replace(/ă/g, 'aw').replace(/Ă/g, 'AW')
+                        .replace(/â/g, 'aa').replace(/Â/g, 'AA');
+                    setSearchQuery(cleanVal);
+                }}
                 placeholder="Tìm kiếm theo Mã đơn, Tracking, Tên người nhận..."
                 className="w-full pl-10 pr-4 py-2.5 bg-transparent text-slate-800 placeholder-slate-400 border-none focus:ring-1 focus:ring-indigo-500 focus:outline-none"
               />
@@ -458,8 +613,42 @@ export default function OrdersPage() {
                 </button>
               )}
             </div>
-          </div>
+            
+            <div className="w-full md:w-56 shrink-0 relative">
+               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+               </div>
+               <select
+                  value={hubFilter}
+                  onChange={(e) => setHubFilter(e.target.value)}
+                  className="w-full pl-10 pr-8 py-2.5 bg-white border-2 border-slate-200 hover:border-slate-300 focus:border-indigo-400 rounded-xl outline-none font-bold text-slate-600 appearance-none shadow-sm cursor-pointer transition-colors"
+               >
+                  <option value="ALL">Tìm theo kho</option>
+                  <option value="NO_HUB" className="text-red-500">Đơn trống Kho</option>
+                  {warehouses.map(wh => {
+                     const whName = typeof wh === 'string' ? wh : (wh.name || wh.id);
+                     return <option key={whName} value={whName} className="text-slate-700">{whName}</option>
+                  })}
+               </select>
+               <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+               </div>
+            </div>
 
+            <div className="w-full md:w-48 shrink-0 relative">
+               <input
+                 type="date"
+                 value={dateFilter}
+                 onChange={(e) => setDateFilter(e.target.value)}
+                 className="w-full pl-3 pr-8 py-2.5 bg-white border-2 border-slate-200 hover:border-slate-300 focus:border-indigo-400 rounded-xl outline-none font-bold text-slate-600 shadow-sm transition-colors uppercase"
+               />
+               {dateFilter && (
+                 <button onClick={() => setDateFilter("")} title="Xóa lộc ngày" className="absolute inset-y-0 right-10 flex items-center text-slate-400 hover:text-red-500 transition">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                 </button>
+               )}
+            </div>
+          </div>
           {/* Tab bộ lọc trạng thái */}
           <div className="flex gap-2 overflow-x-auto p-4 border-b border-slate-200 scrollbar-hide bg-slate-50">
             {[
@@ -510,7 +699,7 @@ export default function OrdersPage() {
                       onChange={handleSelectAll}
                     />
                   </th>
-                  <th className="px-3 py-3 text-center">Description</th>
+                  <th className="px-3 py-3 text-center">MÃ ĐƠN HÀNG</th>
                   <th className="px-3 py-3 text-center">Tên Người Nhận</th>
                   <th className="px-3 py-3 text-center">Tracking Number</th>
                   <th className="px-3 py-3 text-center">Tải Label Khách</th>
@@ -544,7 +733,7 @@ export default function OrdersPage() {
                               {order.Description}
                             </span>
                             <button
-                              onClick={() => downloadBarcodeAsPdf(order.Description!, order["Receiver Name"] || "")}
+                              onClick={() => downloadBarcodeAsPdf(order.Description!, order["Receiver Name"] || "", order.HUB || order.Hub || "-")}
                               className="shrink-0 p-1.5 bg-white hover:bg-indigo-600 text-slate-400 hover:text-white rounded-md border border-slate-200 transition-colors"
                               title="In Barcode Khổ A7"
                             >
@@ -570,9 +759,19 @@ export default function OrdersPage() {
                         ) : (
                           <button
                             onClick={() => handleManualUploadClick(order.id)}
-                            className="px-3 py-1.5 bg-slate-50 hover:bg-slate-200 text-slate-500 border border-slate-200 rounded-md shadow-sm transition-all font-medium inline-flex items-center gap-1.5 text-xs whitespace-nowrap">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-                            Gắn File
+                            disabled={uploadTargetId === order.id}
+                            className={`px-3 py-1.5 border rounded-md shadow-sm transition-all font-medium inline-flex items-center gap-1.5 text-xs whitespace-nowrap ${uploadTargetId === order.id ? 'bg-indigo-100 text-indigo-500 border-indigo-200 cursor-wait' : 'bg-slate-50 hover:bg-slate-200 text-slate-500 border-slate-200'}`}>
+                            {uploadTargetId === order.id ? (
+                                <>
+                                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                    Đang tải...
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                                    Gắn File
+                                </>
+                            )}
                           </button>
                         )}
                       </td>
@@ -580,11 +779,13 @@ export default function OrdersPage() {
                         <select
                           value={order.Status || 'Chờ xử lý'}
                           onChange={(e) => handleStatusChange(order.id, order, e.target.value)}
-                          className={`px-2 py-1.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider outline-none cursor-pointer text-center appearance-none transition-all border shadow-sm w-full min-w-[145px]
+                          disabled={currentUser?.role === 'support'}
+                          className={`px-2 py-1.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider outline-none text-center appearance-none transition-all border shadow-sm w-full min-w-[145px]
                              ${(!order.Status || order.Status === 'Chờ xử lý') ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' : ''}
                              ${order.Status === 'Đóng kiện' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' : ''}
                              ${order.Status === 'Kho Mỹ đã scan' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : ''}
                              ${order.Status === 'Đã Hủy' ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100 line-through' : ''}
+                             ${currentUser?.role === 'support' ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}
                            `}
                         >
                           <option value="Chờ xử lý" className="bg-white text-amber-600 font-bold">Chờ xử lý</option>
@@ -594,7 +795,36 @@ export default function OrdersPage() {
                         </select>
                       </td>
                       <td className="px-3 py-2 text-center text-indigo-700 font-bold text-[13px] uppercase tracking-wider bg-indigo-50/30">
-                        {order.HUB || order.Hub || <span className="text-slate-400 font-normal">-</span>}
+                        {order.HUB || order.Hub ? (
+                            <span>{order.HUB || order.Hub}</span>
+                        ) : (
+                            <select
+                                value=""
+                                onChange={(e) => {
+                                    if (e.target.value) {
+                                        const newValue = e.target.value;
+                                        // 1. Cập nhật giao diện ngay lập tức (Xóa độ trễ)
+                                        updateOrder(order.id, { HUB: newValue, Hub: newValue });
+                                        // 2. Cập nhật ngầm lên Cloud
+                                        import('@/firebase').then(({ db }) => {
+                                            import('firebase/firestore').then(({ doc, updateDoc }) => {
+                                                const orderRef = doc(db, 'orders', order.id);
+                                                updateDoc(orderRef, { HUB: newValue, Hub: newValue }).catch(err => {
+                                                    alert("Lỗi khi lưu trữ kho: " + err.message);
+                                                });
+                                            });
+                                        });
+                                    }
+                                }}
+                                className="px-2 py-1.5 rounded-md bg-white border border-slate-300 text-slate-600 text-[11px] cursor-pointer outline-none w-full max-w-[120px] text-center font-bold shadow-sm hover:border-indigo-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all appearance-none"
+                            >
+                                <option value="" disabled>-</option>
+                                {warehouses.map(wh => {
+                                    const whName = typeof wh === 'string' ? wh : (wh.name || wh.id);
+                                    return <option key={whName} value={whName} className="font-bold text-slate-700">{whName}</option>
+                                })}
+                            </select>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-center text-slate-500 font-medium text-xs whitespace-nowrap">
                         {order.UploadDate || "-"}
@@ -673,7 +903,7 @@ export default function OrdersPage() {
                 {selectedDetail.Status !== 'Đã Hủy' && selectedDetail.Status !== 'Kho Mỹ đã scan' && (
                   <button
                     onClick={() => {
-                      handleStatusChange(selectedDetail.originalIndex, selectedDetail, 'Đã Hủy');
+                      handleStatusChange(selectedDetail.id, selectedDetail, 'Đã Hủy');
                       setSelectedDetail({ ...selectedDetail, Status: 'Đã Hủy' });
                     }}
                     className="ml-4 px-3 py-1 bg-red-50 hover:bg-red-500 border border-red-200 hover:border-red-500 text-red-600 hover:text-white rounded-lg text-xs font-bold uppercase transition flex items-center gap-1 shadow-sm cursor-pointer"
@@ -1012,6 +1242,17 @@ ORDER-5678"
               </button>
             </div>
           </div>
+        </div>
+      )}
+      
+      {toastMsg && (
+        <div className={`fixed bottom-6 right-6 z-[9999] p-4 rounded-xl shadow-2xl border flex items-center gap-3 font-bold animate-in slide-in-from-bottom-5 fade-in duration-300 ${toastMsg.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+            {toastMsg.type === 'success' ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            )}
+            {toastMsg.title}
         </div>
       )}
     </div>

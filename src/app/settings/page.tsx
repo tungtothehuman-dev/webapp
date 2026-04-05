@@ -58,7 +58,7 @@ export default function SettingsPage() {
                         <p className="text-xl font-bold text-slate-800">{currentUser.id}</p>
                         <p className="text-slate-500 capitalize flex items-center gap-2 mt-1 font-medium">
                             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                            Vai trò: {currentUser.role === 'admin' ? 'Quản Trị Viên' : 'Nhân Viên Kho Mỹ'}
+                            Vai trò: {currentUser.role === 'admin' ? 'Quản Trị Viên' : currentUser.role === 'support' ? 'Chăm sóc Khách hàng' : 'Kho US'}
                         </p>
                     </div>
                 </div>

@@ -47,10 +47,10 @@ export default function UploadPDFPage() {
                 1. Tải Lên Excel
              </Link>
              <button className="px-5 py-2.5 rounded-xl font-bold bg-indigo-50 text-indigo-700 border-2 border-indigo-200 pointer-events-none shadow-sm relative">
-                2. Tải & Ráp PDF {isProcessing && <span className="absolute -top-2 -right-2 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-indigo-500"></span></span>}
+                2. Tải và MATCH PDF {isProcessing && <span className="absolute -top-2 -right-2 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-indigo-500"></span></span>}
              </button>
              <Link href="/orders" className="px-5 py-2.5 rounded-xl font-bold bg-white text-slate-600 border border-slate-300 shadow-sm hover:bg-slate-50 hover:text-slate-900 transition-colors">
-                3. Quản lý Đơn
+                3. Quản Lý Đơn
              </Link>
           </div>
 
@@ -88,9 +88,9 @@ export default function UploadPDFPage() {
               </>
             ) : (
               <>
-                 <h3 className="text-xl font-bold text-indigo-900 mb-2">Bấm DZO Đây Quét PDF Trí Tuệ Kép</h3>
+                 <h3 className="text-xl font-bold text-indigo-900 mb-2">Tải Lên Label PDF</h3>
                  <p className="text-slate-500 mb-4 font-medium text-sm">
-                   Sử dụng công nghệ Nhận diện Barcode Quang Học (11Đ) & Văn Bản AI (9Đ).
+                   Tải lên label PDF đồng thời hệ thống sẽ phân tích và tự động gắn với thông tin đơn hàng.
                  </p>
                  <span className="inline-flex px-4 py-2 bg-white rounded-lg text-sm font-bold text-indigo-600 border shadow-sm">
                    Chọn hàng loạt File (.pdf)
@@ -105,7 +105,7 @@ export default function UploadPDFPage() {
          <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
              <h3 className="font-bold text-indigo-900 text-sm flex items-center gap-2">
                  <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                 Monitor: Nhật ký AI Ngầm
+                 Monitor: Nhật ký tải file
              </h3>
              <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-2 py-1 rounded-md">{logs.length} thao tác</span>
          </div>
@@ -122,7 +122,7 @@ export default function UploadPDFPage() {
              ))}
              {logs.length === 0 && (
                  <div className="h-full flex items-center justify-center text-slate-400 text-sm font-medium italic">
-                     Terminal Console trống.
+                     Chưa có dữ liệu.
                  </div>
              )}
          </div>

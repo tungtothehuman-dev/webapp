@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { db } from '@/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
-export type Role = 'admin' | 'warehouse';
+export type Role = 'admin' | 'warehouse' | 'support';
 
 export interface UserAccount {
   id: string; // username

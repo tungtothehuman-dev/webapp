@@ -17,6 +17,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   const { isProcessing, processedFiles, totalFiles, currentFilename } = usePdfTaskStore();
   
   const [isUploadExpanded, setIsUploadExpanded] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const setOrders = useOrderStore(state => state.setOrders);
 
   useEffect(() => {
@@ -45,10 +46,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                     if (parts.length < 2) return 0;
                     const [hours, minutes] = parts[0].split(":");
                     const [day, month, year] = parts[1].split("/");
-                    // Date.UTC hoặc Date constructor để ra số milliseconds
                     return new Date(Number(year), Number(month) - 1, Number(day), Number(hours), Number(minutes)).getTime() || 0;
                 };
-                return parseTime(b["Ngày/Tháng"]) - parseTime(a["Ngày/Tháng"]);
+                const valA = a.UploadDate || a["Ngày/Tháng"] || "";
+                const valB = b.UploadDate || b["Ngày/Tháng"] || "";
+                return parseTime(valB) - parseTime(valA);
              });
 
              setOrders(docs.length > 0 ? docs : []);
@@ -94,62 +96,115 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="flex w-full min-h-screen font-sans text-slate-800">
         {/* Sidebar */}
-        <aside className="w-64 border-r border-neutral-800 bg-[#1c2434] p-6 flex flex-col gap-6 sticky top-0 h-screen print:hidden">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center font-bold text-white shadow-sm">T</div>
-            <h1 className="font-bold text-xl tracking-tight text-white">THE - HUB</h1>
+        <aside className={`border-r border-neutral-800 bg-[#1c2434] p-4 flex flex-col gap-6 sticky top-0 h-screen transition-all duration-300 print:hidden ${isSidebarCollapsed ? 'w-20 items-center' : 'w-64'}`}>
+          <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} w-full`}>
+            <div className="flex items-center gap-3">
+               <button 
+                  onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                  title="Mở rộng / Thu nhỏ menu"
+                  className="w-8 h-8 shrink-0 rounded-lg bg-teal-500 hover:bg-teal-400 transition-colors flex items-center justify-center font-bold text-white shadow-sm cursor-pointer"
+               >
+                 T
+               </button>
+               {!isSidebarCollapsed && <h1 className="font-bold text-[18px] tracking-tight text-white shrink-0">THE - HUB</h1>}
+            </div>
+            {!isSidebarCollapsed && (
+                <button onClick={() => setIsSidebarCollapsed(true)} className="text-slate-500 hover:text-white p-1 rounded transition-colors" title="Thu nhỏ menu">
+                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
+                </button>
+            )}
           </div>
-          <nav className="flex flex-col gap-2 mt-4 flex-1">
-            {currentUser.role === 'admin' && (
+          <nav className="flex flex-col gap-2 mt-2 w-full flex-1">
+            {(currentUser.role === 'admin' || currentUser.role === 'support') && (
               <>
-                <Link href="/" className={`px-4 py-2 rounded-lg transition-colors font-medium ${pathname === '/' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>Trang Chủ</Link>
-                <Link href="/orders" className={`px-4 py-2 rounded-lg transition-colors font-medium ${pathname === '/orders' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>Danh Sách Đơn</Link>
-                <Link href="/packages" className={`px-4 py-2 rounded-lg transition-colors font-medium ${pathname.includes('/packages') ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>Tạo Kiện Hàng</Link>
-                <Link href="/warehouses" className={`px-4 py-2 rounded-lg transition-colors font-medium ${pathname === '/warehouses' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>Quản Lý Kho Mỹ</Link>
-                <Link href="/accounts" className={`px-4 py-2 rounded-lg transition-colors font-medium ${pathname === '/accounts' ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>Quản Lý Tài Khoản</Link>
-                
-                {/* Upload Section Gộp (Accordion) */}
-                <div className="flex flex-col mt-2">
-                    <button 
-                        onClick={() => setIsUploadExpanded(!isUploadExpanded)}
-                        className="px-4 py-2.5 flex justify-between items-center w-full text-left bg-transparent hover:bg-white/5 text-slate-400 hover:text-white text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all"
-                    >
-                        TẢI LÊN HỆ THỐNG
-                        <svg className={`w-4 h-4 transition-transform duration-200 ${isUploadExpanded ? 'rotate-180 text-white' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    {isUploadExpanded && (
-                        <div className="flex flex-col mt-1 ml-3 border-l-2 border-slate-700 space-y-1 pl-3 overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200">
-                            <Link href="/upload-excel" className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${pathname === '/upload-excel' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>File Excel</Link>
-                            <Link href="/upload-pdf" className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${pathname === '/upload-pdf' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>File PDF Labels</Link>
-                        </div>
-                    )}
-                </div>
-                <div className="h-px bg-slate-800 my-2 w-full"></div>
+                <Link title="Trang Chủ" href="/" className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium ${pathname === '/' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'} ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}>
+                  <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                  {!isSidebarCollapsed && <span className="truncate">Trang Chủ</span>}
+                </Link>
+                <Link title="Danh Sách Đơn" href="/orders" className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium ${pathname === '/orders' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'} ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}>
+                  <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                  {!isSidebarCollapsed && <span className="truncate">Danh Sách Đơn</span>}
+                </Link>
+                <Link title="Tạo Kiện Hàng" href="/packages" className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium ${pathname.includes('/packages') ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'} ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}>
+                  <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                  {!isSidebarCollapsed && <span className="truncate">Tạo Kiện Hàng</span>}
+                </Link>
               </>
             )}
             
-            <Link href="/print" className={`px-4 py-2 rounded-lg transition-colors font-medium flex items-center gap-2 ${pathname === '/print' ? 'bg-teal-500 text-white' : 'text-indigo-400 hover:text-white hover:bg-white/10'}`}>
-               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-               In Nhãn Nhanh
-            </Link>
             {currentUser.role === 'admin' && (
-              <Link href="/print-barcode" className={`px-4 py-2 mt-2 rounded-lg transition-colors font-medium flex items-center gap-2 ${pathname === '/print-barcode' ? 'bg-teal-500 text-white' : 'text-teal-400 hover:text-white hover:bg-white/10'}`}>
-                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
-                 In Barcode
+              <>
+                <Link title="Quản Lý Kho Mỹ" href="/warehouses" className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium ${pathname === '/warehouses' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'} ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}>
+                  <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                  {!isSidebarCollapsed && <span className="truncate">Quản Lý Kho Mỹ</span>}
+                </Link>
+                <Link title="Quản Lý Tài Khoản" href="/accounts" className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium ${pathname === '/accounts' ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20' : 'text-slate-400 hover:text-white hover:bg-white/10'} ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}>
+                  <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                  {!isSidebarCollapsed && <span className="truncate">Quản Lý Tài Khoản</span>}
+                </Link>
+              </>
+            )}
+            
+            {/* Upload Section Gộp (Accordion) */}
+            {(currentUser.role === 'admin' || currentUser.role === 'support') && (
+                <div className="flex flex-col mt-2 w-full">
+                    <button 
+                        title="Tải Lên Hệ Thống"
+                        onClick={() => { if(isSidebarCollapsed) setIsSidebarCollapsed(false); setIsUploadExpanded(!isUploadExpanded); }}
+                        className={`px-4 py-2.5 flex items-center w-full text-left bg-transparent hover:bg-white/5 text-slate-400 hover:text-white text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all ${isSidebarCollapsed ? 'justify-center px-0' : 'justify-between'}`}
+                    >
+                        {isSidebarCollapsed ? (
+                            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                        ) : (
+                            <>
+                                <div className="flex items-center gap-3">
+                                    <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                                    <span>TẢI LÊN</span>
+                                </div>
+                                <svg className={`w-4 h-4 shrink-0 transition-transform duration-200 ${isUploadExpanded ? 'rotate-180 text-white' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </>
+                        )}
+                    </button>
+                    {isUploadExpanded && !isSidebarCollapsed && (
+                        <div className="flex flex-col mt-1 ml-3 border-l-2 border-slate-700 space-y-1 pl-3 overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200">
+                            <Link href="/upload-excel" className={`px-4 py-2 rounded-lg transition-colors text-[13px] font-medium ${pathname === '/upload-excel' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>File Excel</Link>
+                            <Link href="/upload-pdf" className={`px-4 py-2 rounded-lg transition-colors text-[13px] font-medium ${pathname === '/upload-pdf' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>File PDF Labels</Link>
+                        </div>
+                    )}
+                </div>
+            )}
+            
+            <div className="h-px bg-slate-800 my-2 w-full"></div>
+            
+            <Link title="In Nhãn Nhanh" href="/print" className={`px-4 py-2.5 rounded-lg transition-all font-medium flex items-center gap-3 ${pathname === '/print' ? 'bg-teal-500 text-white' : 'text-indigo-400 hover:text-white hover:bg-white/10'} ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}>
+               <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+               {!isSidebarCollapsed && <span className="truncate">In Nhãn Nhanh</span>}
+            </Link>
+            {(currentUser.role === 'admin' || currentUser.role === 'support') && (
+              <Link title="In Barcode" href="/print-barcode" className={`px-4 py-2.5 rounded-lg transition-all font-medium flex items-center gap-3 ${pathname === '/print-barcode' ? 'bg-teal-500 text-white' : 'text-teal-400 hover:text-white hover:bg-white/10'} ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}>
+                 <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                 {!isSidebarCollapsed && <span className="truncate">In Barcode</span>}
               </Link>
             )}
           </nav>
 
-          <div className="mt-auto border-t border-slate-700 pt-4 flex flex-col gap-2">
-             <Link href="/settings" className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium ${pathname === '/settings' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>
-                 <div className="w-6 h-6 rounded-full bg-slate-600 flex items-center justify-center font-bold text-[10px] text-white">
-                     {currentUser.displayName.charAt(0).toUpperCase()}
+          <div className="mt-auto border-t border-slate-700 pt-4 flex flex-col gap-2 w-full">
+             <Link title="Cài Đặt" href="/settings" className={`px-4 py-2 rounded-lg transition-all flex items-center gap-3 ${pathname === '/settings' ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'} ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}>
+                 <div className="w-8 h-8 shrink-0 rounded-full bg-slate-500/50 flex items-center justify-center font-bold text-xs text-white uppercase shadow-sm">
+                     {currentUser.displayName.charAt(0)}
                  </div>
-                 <span className="truncate">{currentUser.displayName}</span>
+                 {!isSidebarCollapsed && (
+                     <div className="flex flex-col truncate">
+                         <span className="truncate text-sm font-bold tracking-wide leading-tight">{currentUser.displayName}</span>
+                         <span className={`text-[11px] font-medium mt-0.5 truncate uppercase tracking-wider ${pathname === '/settings' ? 'text-teal-100' : 'text-slate-500'}`}>
+                            {currentUser.role === 'admin' ? 'System Administrator' : currentUser.role === 'support' ? 'Customer Support' : 'US Warehouse'}
+                         </span>
+                     </div>
+                 )}
              </Link>
-             <button onClick={logout} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-red-500 transition-colors text-left text-sm font-medium flex items-center gap-2">
-                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                 Đăng Xuất (Log out)
+             <button title="Đăng Xuất (Log out)" onClick={logout} className={`px-4 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-red-500 transition-all font-medium flex items-center gap-3 ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}>
+                 <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                 {!isSidebarCollapsed && <span className="text-sm truncate">Đăng Xuất</span>}
              </button>
           </div>
         </aside>

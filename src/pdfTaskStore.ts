@@ -72,6 +72,7 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
         const mapData: Record<string, any> = {};
         const safeBlobs: Record<string, Blob> = {};
         let matchCount = 0;
+        const fileResults: any[] = [];
 
         try {
             for (let i = 0; i < files.length; i++) {
@@ -186,7 +187,7 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                         }
 
                         // 3. Chấm điểm Y XÌ ĐÚC Tên trong văn bản ảnh
-                        const addressStr = (order["Receiver Address 1"] || "").toString().toUpperCase(); const addressClean = addressStr.replace(/[\s\-_,\.]/g, ""); if (addressClean.length > 5 && pdfClean.includes(addressClean)) { score += 10; } if (nameClean.length > 2 && pdfClean.includes(nameClean)) {
+                        const addressStr = (order["Receiver Address 1"] || "").toString().toUpperCase(); const addressClean = addressStr.replace(/[\s\-_,\.]/g, ""); if (addressClean.length > 5 && pdfClean.includes(addressClean)) { score += 1000; } if (nameClean.length > 2 && pdfClean.includes(nameClean)) {
                             score += 1000;
                         }
 
@@ -205,13 +206,28 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                             trackingNumber: barcodeText || file.name.replace(/\.pdf$/i, "")
                         };
                         matchCount++;
-                        addLog('success', `File "${file.name}": [${orders[matchedIndex]["Description"]}]. Lọc song song hoàn hảo Tên+Mã (${bestScore} điểm).`);
+                        addLog('success', `File "${file.name}": [${orders[matchedIndex]["Description"]}]. Lọc song song hoàn hảo Tên/Địa chỉ + Mã (${bestScore} điểm).`);
                     } else if (matchedIndex !== -1 && bestScore > 0) {
+                        fileResults.push({
+                            "Tên File PDF": file.name,
+                            "Trạng thái": "Thất bại",
+                            "Nguyên nhân": `Điểm AI quá thấp (${bestScore} điểm). Không đủ tiêu chuẩn ghép (Tên/Địa chỉ không khớp).`
+                        });
                         addLog('warning', `File "${file.name}": AI từ chối. File có vẻ rập khuôn nhưng KHÔNG CHUẨN XÁC NGUYÊN BẢN (Gạt bỏ).`);
                     } else {
+                        fileResults.push({
+                            "Tên File PDF": file.name,
+                            "Trạng thái": "Thất bại",
+                            "Nguyên nhân": `Bị loại vì rác, không tìm thấy Description hay bất kì thông tin nhận diện nào.`
+                        });
                         addLog('error', `File "${file.name}": File rác, không chứa Mã Description hay Tên khách hàng.`);
                     }
                 } catch (err: any) {
+                    fileResults.push({
+                        "Tên File PDF": file.name,
+                        "Trạng thái": "Lỗi AI",
+                        "Nguyên nhân": err.message
+                    });
                     addLog('error', `File "${file.name}": Lỗi Engine (${err.message})`);
                 }
             }
@@ -284,9 +300,25 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                             timestamp: timeString
                         }]
                     });
+                    
+                    fileResults.push({
+                        "Tên File PDF": fname,
+                        "Mã ĐH ghép chuẩn": matchRow.description,
+                        "Tracking": matchRow.trackingNumber,
+                        "Trạng thái": "Thành công",
+                        "Nguyên nhân": "Ghép cặp chuẩn xác tuyệt đối"
+                    });
+                    
                     addLog('success', `[${fname}] Hoàn tất niêm phong!`);
                     cloudSuccess++;
                 } catch (err: any) {
+                    fileResults.push({
+                        "Tên File PDF": fname,
+                        "Mã ĐH ghép chuẩn": matchRow.description,
+                        "Tracking": matchRow.trackingNumber,
+                        "Trạng thái": "Lỗi Cloud",
+                        "Nguyên nhân": `Upload bị lỗi: ${err.message}`
+                    });
                     addLog('error', `Lỗi kết nối Firebase (File ${fname}): ${err.message}`);
                 }
             }
@@ -298,6 +330,23 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
             if (tesseractWorker) {
                 try { await tesseractWorker.terminate(); } catch (e) { }
             }
+            
+            // XUẤT FILE EXCEL BÁO CÁO CÁC FILE THÀNH CÔNG / THẤT BẠI
+            if (fileResults.length > 0) {
+                try {
+                    const XLSX = await import('xlsx');
+                    const worksheet = XLSX.utils.json_to_sheet(fileResults);
+                    const workbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(workbook, worksheet, "Log Result");
+                    
+                    const timeStr = new Date().toISOString().replace(/[:.]/g, '-');
+                    XLSX.writeFile(workbook, `Log_Pdf_Scan_${timeStr}.xlsx`);
+                    addLog('success', 'Đã lưu file Báo Cáo Kết Quả Excel về máy!');
+                } catch (ex) {
+                    addLog('error', `Không thể xuất file Excel báo cáo.`);
+                }
+            }
+
             set({ isProcessing: false, currentFilename: 'Đã hoàn thành!' });
         }
     }

@@ -61,6 +61,7 @@ interface PackageStore {
   addPackage: (pkg: PackageRow) => void;
   deletePackage: (id: string) => void;
   clearPackages: () => void;
+  updatePackage: (id: string, updates: Partial<PackageRow>) => void;
 }
 
 export const usePackageStore = create<PackageStore>()(
@@ -69,7 +70,10 @@ export const usePackageStore = create<PackageStore>()(
       packages: [],
       addPackage: (pkg) => set((state) => ({ packages: [pkg, ...state.packages] })),
       deletePackage: (id) => set((state) => ({ packages: state.packages.filter(p => p.id !== id) })),
-      clearPackages: () => set({ packages: [] })
+      clearPackages: () => set({ packages: [] }),
+      updatePackage: (id, updates) => set((state) => ({
+        packages: state.packages.map(p => p.id === id ? { ...p, ...updates } : p)
+      }))
     }),
     {
       name: 'package-storage',

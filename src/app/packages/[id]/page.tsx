@@ -403,13 +403,15 @@ export default function PackageDetailPage() {
                     <button onClick={togglePackageStatus} className={`px-5 py-2.5 font-bold rounded-md transition text-sm ${isClosed ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-[#009688] hover:bg-[#00796b] text-white'}`}>
                         {isClosed ? "Mở lại kiện" : "Đóng kiện hàng"}
                     </button>
-                    <button 
-                        onClick={handleDeletePackage} 
-                        className={`px-5 py-2.5 font-bold rounded-md transition text-sm ${isClosed ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50' : 'bg-transparent border border-red-500 text-red-500 hover:bg-red-500/10'}`}
-                        disabled={isClosed}
-                    >
-                        Hủy kiện hàng
-                    </button>
+                    {currentUser?.role !== 'support' && (
+                        <button 
+                            onClick={handleDeletePackage} 
+                            className={`px-5 py-2.5 font-bold rounded-md transition text-sm ${isClosed ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50' : 'bg-transparent border border-red-500 text-red-500 hover:bg-red-500/10'}`}
+                            disabled={isClosed}
+                        >
+                            Hủy kiện hàng
+                        </button>
+                    )}
                 </div>
             </div>
 

@@ -50,14 +50,41 @@ export default function PrintPage() {
         const query = scanValue.trim();
         if (!query) return;
 
+        // Auto-fix lỗi kẹt Unikey/Vietkey khi dùng súng bắn mã vạch (ví dụ: US -> Ú, IS -> Í, DD -> Đ)
+        const decodeTelexForBarcode = (str: string) => {
+            return str
+                .replace(/ú/g, 'us').replace(/Ú/g, 'US')
+                .replace(/í/g, 'is').replace(/Í/g, 'IS')
+                .replace(/á/g, 'as').replace(/Á/g, 'AS')
+                .replace(/é/g, 'es').replace(/É/g, 'ES')
+                .replace(/ó/g, 'os').replace(/Ó/g, 'OS')
+                .replace(/ý/g, 'ys').replace(/Ý/g, 'YS')
+                .replace(/đ/g, 'dd').replace(/Đ/g, 'DD')
+                .replace(/ư/g, 'uw').replace(/Ư/g, 'UW')
+                .replace(/ơ/g, 'ow').replace(/Ơ/g, 'OW')
+                .replace(/ô/g, 'oo').replace(/Ô/g, 'OO')
+                .replace(/ê/g, 'ee').replace(/Ê/g, 'EE')
+                .replace(/ă/g, 'aw').replace(/Ă/g, 'AW')
+                .replace(/â/g, 'aa').replace(/Â/g, 'AA');
+        };
+        
+        const cleanQuery = decodeTelexForBarcode(query);
+        
+        // Cần xoá dấu tiếng việt ở cả Mã Đơn (ví dụ: PĐM) và Query (PDM) để có thể khớp nhau 100%
+        const removeAccents = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+        
+        const qNoAcc = removeAccents(query);
+        const cleanNoAcc = removeAccents(cleanQuery);
+
         // Tìm kiếm xem có đơn nào trùng khớp Tracking hoặc Description không
-        const orderIndex = orders.findIndex(o =>
-            (o.Description || "").toLowerCase() === query.toLowerCase() ||
-            (o.TrackingNumber || "").toLowerCase() === query.toLowerCase()
-        );
+        const orderIndex = orders.findIndex(o => {
+            const desc = removeAccents(o.Description || "");
+            const track = removeAccents(o.TrackingNumber || "");
+            return desc === qNoAcc || track === qNoAcc || desc === cleanNoAcc || track === cleanNoAcc;
+        });
 
         if (orderIndex === -1) {
-            setLastScanResult({ status: 'not_found', message: `Không tìm thấy Đơn Hàng nào khớp với mã: ${query}` });
+            setLastScanResult({ status: 'not_found', message: `Không tìm thấy Đơn Hàng nào khớp với mã: ${query} (Đã tự động dịch Unikey: ${cleanQuery})` });
             setScanValue("");
             return;
         }

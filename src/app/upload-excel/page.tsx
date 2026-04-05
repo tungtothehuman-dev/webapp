@@ -204,10 +204,53 @@ export default function UploadExcelPage() {
     reader.readAsBinaryString(file);
   };
 
+  const downloadTemplate = async () => {
+    const templateHeaders = [
+      "Sender Name", "Sender Company", "Sender Address1", "Sender Address2", "Sender City", "Sender State", "Sender Zipcode", "Sender Phone",
+      "Receiver Name", "Receiver Company", "Receiver Address 1", "Receiver Address 2", "Receiver City", "Receiver State", "Receiver Zip", "Receiver Phone",
+      "Weight", "Length", "Width", "Height", "Description", "Reference1", "Reference2", "SenderCountry", "ReceiverCountry", "TRACKING"
+    ];
+    
+    const sampleData = [{
+        "Sender Name": "Justin",
+        "Sender Address1": "33 Yorkshire Ln",
+        "Sender City": "Decatur",
+        "Sender State": "AL",
+        "Sender Zipcode": 35603,
+        "SenderCountry": "US",
+        "Receiver Name": "kyle broadhurst",
+        "Receiver Address 1": "1921 Heritage Loop",
+        "Receiver City": "Myrtle Beach",
+        "Receiver State": "SC",
+        "Receiver Zip": 29577,
+        "ReceiverCountry": "US",
+        "Weight": 2.6,
+        "Length": 3.9,
+        "Width": 3.9,
+        "Height": 3.9,
+        "Description": "T3.209"
+    }];
+
+    const worksheet = xlsx.utils.json_to_sheet(sampleData, { header: templateHeaders });
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, "Template");
+    xlsx.writeFile(workbook, "THE_HUB_Template.xlsx");
+  };
+
   return (
     <div className="flex gap-8 max-w-7xl mx-auto items-start">
       <div className="flex-1 w-full max-w-xl">
-          <h2 className="text-3xl font-bold mb-8 text-slate-800">Tải Lên File Excel Dữ Liệu</h2>
+          <div className="flex justify-between items-center mb-8">
+            <h2 className="text-3xl font-bold text-slate-800">Tải Lên File Excel Dữ Liệu</h2>
+            <button 
+                onClick={downloadTemplate}
+                className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-sm flex items-center gap-2 transition-colors border-2 border-slate-200 hover:border-slate-300 shadow-sm"
+                title="Tải về một file mẫu chuẩn để điền dữ liệu"
+            >
+                <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                Tải File Mẫu (.xlsx)
+            </button>
+          </div>
           
           <div className="relative bg-white border-2 border-slate-300 border-dashed rounded-2xl p-12 text-center hover:bg-slate-50 transition-colors cursor-pointer group shadow-sm">
             <input 

@@ -8,13 +8,14 @@ import { useRouter } from "next/navigation";
 export default function PackagesPage() {
   const router = useRouter();
   const { orders, updateOrder } = useOrderStore();
-  const { packages, addPackage, deletePackage, clearPackages } = usePackageStore();
+  const { packages, addPackage, deletePackage, clearPackages, updatePackage } = usePackageStore();
   const { warehouses } = useWarehouseStore();
   const { currentUser } = useAuthStore();
 
   // Modals & Filters
   const [isCreating, setIsCreating] = useState(false);
   const [filterDest, setFilterDest] = useState("All");
+  const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   
   
   // Data for Create Modal
@@ -145,7 +146,9 @@ export default function PackagesPage() {
                                 <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap text-center">Số lượng đơn</th>
                                 <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Trạng thái kiện</th>
                                 <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Track kiện</th>
-                                <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap text-center">Thao tác</th>
+                                {currentUser?.role !== 'support' && (
+                                    <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap text-center">Thao tác</th>
+                                )}
                             </tr>
                         </thead>
                         <tbody className="bg-white">
@@ -185,31 +188,76 @@ export default function PackagesPage() {
                                                 {pkg.status.includes('Đã xuất kho') ? 'ĐÃ XUẤT KHO' : pkg.status}
                                             </span>
                                         </td>
-                                        <td className="px-5 py-3 whitespace-nowrap">
-                                            {pkg.masterTracking ? (
-                                                 <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 truncate max-w-[150px] inline-block">{pkg.masterTracking}</span>
+                                        <td className="px-5 py-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                                            {editingTrackId === pkg.id ? (
+                                                <div className="relative flex items-center min-w-[220px] max-w-[240px]">
+                                                    <input
+                                                        autoFocus
+                                                        type="text"
+                                                        placeholder="Nhập track..."
+                                                        defaultValue={pkg.masterTracking || ''}
+                                                        className="w-full px-3 py-1.5 text-[13px] font-mono font-bold text-slate-800 bg-white border border-indigo-500 rounded ring-1 ring-indigo-500 outline-none shadow-sm transition-all pr-8"
+                                                        onBlur={(e) => {
+                                                            const newVal = e.target.value.trim();
+                                                            setEditingTrackId(null);
+                                                            if (newVal !== (pkg.masterTracking || '')) {
+                                                                updatePackage(pkg.id, { masterTracking: newVal });
+                                                                import('@/firebase').then(({ db }) => {
+                                                                    import('firebase/firestore').then(({ doc, updateDoc }) => {
+                                                                       updateDoc(doc(db, 'packages', pkg.id), { masterTracking: newVal }).catch(err => {
+                                                                            console.error("Lỗi đồng bộ mã kiện:", err);
+                                                                       });
+                                                                    });
+                                                                });
+                                                            }
+                                                        }}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.currentTarget.blur();
+                                                            } else if (e.key === 'Escape') {
+                                                                setEditingTrackId(null);
+                                                            }
+                                                        }}
+                                                    />
+                                                    <div className="absolute right-2.5 text-indigo-500 pointer-events-none">
+                                                        <svg className="w-4 h-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M5 13l4 4L19 7"></path></svg>
+                                                    </div>
+                                                </div>
                                             ) : (
-                                                 <span className="text-slate-400 text-xs italic font-medium">Trống</span>
+                                                <div className="flex items-center gap-2 max-w-[240px] group/track">
+                                                    <span className={`text-[13px] font-mono font-bold truncate ${pkg.masterTracking ? 'text-slate-800' : 'text-slate-400 italic font-normal'}`}>
+                                                        {pkg.masterTracking || "Nhập mã track..."}
+                                                    </span>
+                                                    <button 
+                                                        onClick={() => setEditingTrackId(pkg.id)} 
+                                                        className="p-1.5 text-slate-400 hover:text-indigo-600 opacity-0 group-hover/track:opacity-100 transition-all rounded-md hover:bg-indigo-50 shrink-0"
+                                                        title="Sửa track kiện"
+                                                    >
+                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                                    </button>
+                                                </div>
                                             )}
                                         </td>
-                                        <td className="px-5 py-3 whitespace-nowrap text-center">
-                                            <button 
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (pkg.orderDescriptions && pkg.orderDescriptions.length > 0) {
-                                                        alert("Lệnh bị từ chối: Kiện hàng này đang chứa dữ liệu đơn hàng!\n\nVui lòng nhấp vào kiện để xem chi tiết và phải gỡ hết đơn thao tác ra thì mới có quyền xóa kiện này.");
-                                                        return;
-                                                    }
-                                                    if (confirm(`Bạn có chắc muốn xóa vĩnh viễn kiện rỗng ${pkg.id} không?`)) {
-                                                        deletePackage(pkg.id);
-                                                    }
-                                                }} 
-                                                className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-xl transition-all border border-transparent hover:border-red-100 opacity-60 group-hover:opacity-100"
-                                                title="Xóa kiện"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                            </button>
-                                        </td>
+                                        {currentUser?.role !== 'support' && (
+                                            <td className="px-5 py-3 whitespace-nowrap text-center">
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (pkg.orderDescriptions && pkg.orderDescriptions.length > 0) {
+                                                            alert("Lệnh bị từ chối: Kiện hàng này đang chứa dữ liệu đơn hàng!\n\nVui lòng nhấp vào kiện để xem chi tiết và phải gỡ hết đơn thao tác ra thì mới có quyền xóa kiện này.");
+                                                            return;
+                                                        }
+                                                        if (confirm(`Bạn có chắc muốn xóa vĩnh viễn kiện rỗng ${pkg.id} không?`)) {
+                                                            deletePackage(pkg.id);
+                                                        }
+                                                    }} 
+                                                    className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-xl transition-all border border-transparent hover:border-red-100 opacity-60 group-hover:opacity-100"
+                                                    title="Xóa kiện"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                </button>
+                                            </td>
+                                        )}
                                     </tr>
                                 );
                             })}

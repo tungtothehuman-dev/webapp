@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useWarehouseStore, WarehouseItem } from "@/store";
 import { doc, setDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/firebase";
+import { useAuthStore } from "@/authStore";
 
 export default function WarehousesPage() {
   const { warehouses, addWarehouse, updateWarehouse, deleteWarehouse } = useWarehouseStore();
@@ -17,8 +18,20 @@ export default function WarehousesPage() {
   const [editReceiverName, setEditReceiverName] = useState("");
 
   const [mounted, setMounted] = useState(false);
+  const { currentUser } = useAuthStore();
+  
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
+
+  if (!currentUser || currentUser.role !== 'admin') {
+      return (
+         <div className="p-8 w-full max-w-7xl mx-auto flex items-center justify-center min-h-[500px]">
+             <div className="text-center font-medium text-red-600 bg-red-50 p-6 rounded-2xl border border-red-100">
+                 Bạn không có quyền quản lý Trạm Kho.
+             </div>
+         </div>
+      );
+  }
 
   // Xử lý chuẩn hóa data (Vì trước đây lưu mảng string)
   const normalizedWarehouses = warehouses.map(w => {
