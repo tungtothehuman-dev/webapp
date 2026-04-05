@@ -69,7 +69,15 @@ export default function UploadExcelPage() {
         // --- KIỂM TRA ĐỊNH DẠNG FILE EXCEL GỐC ---
         const rawHeaders = xlsx.utils.sheet_to_json(ws, { header: 1 })[0] as string[];
         const headers = rawHeaders ? rawHeaders.map(h => h ? h.toString().trim() : "") : [];
-        const missingHeaders = requiredFields.filter(f => !headers.includes(f));
+        
+        const altNames: Record<string, string> = {
+            "Weight (lbs)": "Weight",
+            "Length (in)": "Length",
+            "Width (in)": "Width",
+            "Height (in)": "Height"
+        };
+
+        const missingHeaders = requiredFields.filter(f => !headers.includes(f) && !(altNames[f] && headers.includes(altNames[f])));
         
         if (missingHeaders.length > 0) {
             setErrorModalContent({
@@ -101,7 +109,11 @@ export default function UploadExcelPage() {
              
              let missingFields: string[] = [];
              for (const field of requiredFields) {
-                 if (row[field] == null || row[field].toString().trim() === '') {
+                 const alt = altNames[field];
+                 let val = row[field];
+                 if (val === undefined && alt !== undefined) val = row[alt];
+
+                 if (val == null || val.toString().trim() === '') {
                      missingFields.push(`[${field}]`);
                  }
              }
@@ -150,10 +162,10 @@ export default function UploadExcelPage() {
             const newOrder: any = { 
                 ...row, 
                 HUB: matchedHub,
-                Weight: row["Weight (lbs)"],
-                Length: row["Length (in)"],
-                Width: row["Width (in)"],
-                Height: row["Height (in)"],
+                Weight: row["Weight (lbs)"] !== undefined ? row["Weight (lbs)"] : row["Weight"],
+                Length: row["Length (in)"] !== undefined ? row["Length (in)"] : row["Length"],
+                Width: row["Width (in)"] !== undefined ? row["Width (in)"] : row["Width"],
+                Height: row["Height (in)"] !== undefined ? row["Height (in)"] : row["Height"],
                 UploadDate: timeString,
                 createdAt: Date.now() - index, // Đánh mốc thời gian chính xác để giữ đúng thứ tự Excel
                 ActionHistory: [{
