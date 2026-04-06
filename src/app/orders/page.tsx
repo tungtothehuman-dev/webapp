@@ -848,7 +848,17 @@ export default function OrdersPage() {
                               return (
                                  <div className="relative inline-flex items-center justify-center">
                                     <button
-                                       onClick={() => window.open(order.pdfUrl, '_blank')}
+                                       onClick={async () => {
+                                           try {
+                                               const res = await fetch(order.pdfUrl!);
+                                               const blob = await res.blob();
+                                               const fileName = `[${order.Description || 'KhongMa'}] - ${order.TrackingNumber || 'KhongTracking'}.pdf`;
+                                               saveAs(blob, fileName);
+                                           } catch (e) {
+                                               console.error("Fetch failed, falling back to window.open", e);
+                                               window.open(order.pdfUrl, '_blank');
+                                           }
+                                       }}
                                        className={`px-3 py-1.5 border rounded-md shadow-sm transition-all font-medium inline-flex items-center justify-center gap-1.5 text-xs whitespace-nowrap min-w-[125px] ${
                                          isManualMatch
                                            ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
