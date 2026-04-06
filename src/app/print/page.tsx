@@ -71,16 +71,25 @@ export default function PrintPage() {
         const cleanQuery = decodeTelexForBarcode(query);
         
         // Cần xoá dấu tiếng việt ở cả Mã Đơn (ví dụ: PĐM) và Query (PDM) để có thể khớp nhau 100%
-        const removeAccents = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+        // Đồng thời loại bỏ khoảng chấm phẩy, khoảng trắng
+        const normalizeStr = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").replace(/[\s\-_,\.]/g, '').toLowerCase();
         
-        const qNoAcc = removeAccents(query);
-        const cleanNoAcc = removeAccents(cleanQuery);
+        const qNorm = normalizeStr(query);
+        const cleanNorm = normalizeStr(cleanQuery);
 
         // Tìm kiếm xem có đơn nào trùng khớp Tracking hoặc Description không
         const orderIndex = orders.findIndex(o => {
-            const desc = removeAccents(o.Description || "");
-            const track = removeAccents(o.TrackingNumber || "");
-            return desc === qNoAcc || track === qNoAcc || desc === cleanNoAcc || track === cleanNoAcc;
+            const desc = normalizeStr(o.Description || "");
+            const track = normalizeStr(o.TrackingNumber || "");
+            
+            if (desc === qNorm || desc === cleanNorm) return true;
+            if (track && qNorm) {
+                if (track === qNorm || track === cleanNorm) return true;
+                // Đặc trị súng quét mã vạch USPS dính routing prefix (420xxxx + Track)
+                if (track.length >= 10 && (qNorm.includes(track) || cleanNorm.includes(track))) return true;
+                if (qNorm.length >= 10 && track.includes(qNorm)) return true;
+            }
+            return false;
         });
 
         if (orderIndex === -1) {

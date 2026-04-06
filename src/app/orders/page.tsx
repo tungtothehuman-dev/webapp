@@ -260,9 +260,9 @@ export default function OrdersPage() {
       const tempCanvas = document.createElement("canvas");
       JsBarcode(tempCanvas, safeBarcodeData, {
         text: description,
-        width: 4,
-        height: 350,
-        fontSize: 60,
+        height: 180,
+        width: 5,
+        fontSize: 50,
         background: "#ffffff",
         margin: 20
       });
@@ -277,21 +277,21 @@ export default function OrdersPage() {
       }
 
       const bcX = (canvas.width - bcWidth) / 2;
-      const bcY = (canvas.height / 2) - (bcHeight / 2) - 80;
+      const bcY = (canvas.height / 2) - bcHeight - 60;
 
+      ctx.imageSmoothingEnabled = false;
       ctx.drawImage(tempCanvas, bcX, bcY, bcWidth, bcHeight);
 
       ctx.fillStyle = "#000000";
-      ctx.font = "bold 70px Arial, sans-serif";
+      ctx.font = "bold 55px Arial, sans-serif";
       ctx.textAlign = "center";
-
-      ctx.fillText(receiverName, canvas.width / 2, bcY + bcHeight + 120, maxBcWidth);
+      ctx.fillText(receiverName, canvas.width / 2, bcY + bcHeight + 80, maxBcWidth);
       
       if (hub && hub !== '-') {
           const cleanHub = hub.replace(/HUB/gi, '').trim();
-          ctx.font = "bold 50px Arial, sans-serif";
-          ctx.fillStyle = "#333333";
-          ctx.fillText(cleanHub, canvas.width / 2, bcY + bcHeight + 210, maxBcWidth);
+          ctx.fillStyle = "#4a4a4a";
+          ctx.font = "bold 45px Arial, sans-serif";
+          ctx.fillText(cleanHub, canvas.width / 2, bcY + bcHeight + 160, maxBcWidth);
       }
 
       const imgDataUrl = canvas.toDataURL("image/png");

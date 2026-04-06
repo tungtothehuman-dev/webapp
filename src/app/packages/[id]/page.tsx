@@ -55,17 +55,57 @@ export default function PackageDetailPage() {
             return;
         }
 
-        const code = scanInput.trim();
-        if (!code) return;
+        const rawCode = scanInput.trim();
+        if (!rawCode) return;
+
+        const decodeTelexForBarcode = (str: string) => {
+            return str
+                .replace(/ú/g, 'us').replace(/Ú/g, 'US')
+                .replace(/í/g, 'is').replace(/Í/g, 'IS')
+                .replace(/á/g, 'as').replace(/Á/g, 'AS')
+                .replace(/é/g, 'es').replace(/É/g, 'ES')
+                .replace(/ó/g, 'os').replace(/Ó/g, 'OS')
+                .replace(/ý/g, 'ys').replace(/Ý/g, 'YS')
+                .replace(/đ/g, 'dd').replace(/Đ/g, 'DD')
+                .replace(/ư/g, 'uw').replace(/Ư/g, 'UW')
+                .replace(/ơ/g, 'ow').replace(/Ơ/g, 'OW')
+                .replace(/ô/g, 'oo').replace(/Ô/g, 'OO')
+                .replace(/ê/g, 'ee').replace(/Ê/g, 'EE')
+                .replace(/ă/g, 'aw').replace(/Ă/g, 'AW')
+                .replace(/â/g, 'aa').replace(/Â/g, 'AA');
+        };
+
+        const cleanQuery = decodeTelexForBarcode(rawCode);
+        
+        // Loại bỏ khoảng trắng, dấu tiếng Việt để so sánh chuẩn nhất
+        const normalizeStr = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").replace(/[\s\-_,\.]/g, '').toLowerCase();
+        
+        const qNorm = normalizeStr(rawCode);
+        const cleanNorm = normalizeStr(cleanQuery);
+
+        // 1. Tìm thông qua mã Tracking hoặc Description (có hỗ trợ gõ nhầm Telex)
+        const orderMatchIdx = orders.findIndex(o => {
+            const desc = normalizeStr(o.Description || "");
+            const track = normalizeStr(o.TrackingNumber || "");
+            
+            if (desc === qNorm || desc === cleanNorm) return true;
+            if (track && qNorm) {
+                if (track === qNorm || track === cleanNorm) return true;
+                // Xử lý súng bắn mã vạch thừa tiền tố USPS (VD mã phụ 420 + ZIP đi liền với Track)
+                if (track.length >= 10 && (qNorm.includes(track) || cleanNorm.includes(track))) return true;
+                if (qNorm.length >= 10 && track.includes(qNorm)) return true;
+            }
+            return false;
+        });
+
+        // Lấy đúng mã chuẩn gốc (Description) nếu tìm thấy, không thì xài nguyên bản
+        const code = (orderMatchIdx !== -1 && orders[orderMatchIdx].Description) ? orders[orderMatchIdx].Description : rawCode;
 
         if (activePkg.orderDescriptions.includes(code)) {
             alert(`Mã ${code} đã nằm trong kiện quản lý!`);
             setScanInput("");
             return;
         }
-
-        // 1. Phục hồi biến orderMatchIdx
-        const orderMatchIdx = orders.findIndex(o => o.Description === code);
 
         let isHubError = false;
 
@@ -87,7 +127,7 @@ export default function PackageDetailPage() {
         }
 
         // Vẫn lưu vào kiện dù hợp lệ hay không để hiển thị Lỗi dưới UI
-        const updatedOrderDescriptions = [...activePkg.orderDescriptions, code];
+        const updatedOrderDescriptions = [code, ...activePkg.orderDescriptions];
         setPackage(activePkg, { orderDescriptions: updatedOrderDescriptions });
 
         if (orderMatchIdx !== -1) {

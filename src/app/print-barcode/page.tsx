@@ -25,9 +25,10 @@ export default function PrintBarcodePage() {
             const pdfDoc = await PDFDocument.create();
 
             for (const code of codes) {
-                // Find receiver name from orders
+                // Find receiver name and HUB from orders
                 const matchedOrder = orders.find(o => o.Description === code);
                 const receiverName = matchedOrder?.["Receiver Name"] || "";
+                const hubDisplay = (matchedOrder?.HUB || matchedOrder?.Hub || "").toString().replace(/^HUB\s*/i, '').trim().toUpperCase();
 
                 const canvas = document.createElement("canvas");
                 canvas.width = 840; 
@@ -41,8 +42,9 @@ export default function PrintBarcodePage() {
                 const tempCanvas = document.createElement("canvas");
                 JsBarcode(tempCanvas, code, {
                     text: code,
-                    height: 120,
-                    fontSize: 35,
+                    height: 180,   // Giảm chiều cao xuống cho lùn bớt
+                    width: 5,      // Dày nét vẽ 5
+                    fontSize: 50,  // Chữ mã code to ra
                     background: "#ffffff",
                     margin: 20
                 });
@@ -50,7 +52,9 @@ export default function PrintBarcodePage() {
                 let bcWidth = tempCanvas.width;
                 let bcHeight = tempCanvas.height;
                 const maxBcWidth = canvas.width - 120;
+                
                 if (bcWidth > maxBcWidth) {
+                    // Nếu mã quá dài, bóp lại theo tỷ lệ khung màn hình
                     const scale = maxBcWidth / bcWidth;
                     bcWidth = maxBcWidth;
                     bcHeight *= scale;
@@ -59,6 +63,7 @@ export default function PrintBarcodePage() {
                 const bcX = (canvas.width - bcWidth) / 2;
                 const bcY = (canvas.height / 2) - bcHeight - 60; 
                 
+                ctx.imageSmoothingEnabled = false;
                 ctx.drawImage(tempCanvas, bcX, bcY, bcWidth, bcHeight);
 
                 if (receiverName) {
@@ -66,6 +71,13 @@ export default function PrintBarcodePage() {
                     ctx.font = "bold 55px Arial, sans-serif";
                     ctx.textAlign = "center"; 
                     ctx.fillText(receiverName, canvas.width / 2, bcY + bcHeight + 80, maxBcWidth);
+                }
+
+                if (hubDisplay) {
+                    ctx.fillStyle = "#4a4a4a"; // Mã màu xám đậm cho HUB 
+                    ctx.font = "bold 45px Arial, sans-serif";
+                    ctx.textAlign = "center"; 
+                    ctx.fillText(hubDisplay, canvas.width / 2, bcY + bcHeight + 160, maxBcWidth);
                 }
 
                 const imgDataUrl = canvas.toDataURL("image/png");
