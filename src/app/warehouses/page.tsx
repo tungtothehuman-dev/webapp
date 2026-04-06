@@ -5,9 +5,11 @@ import { useWarehouseStore, WarehouseItem } from "@/store";
 import { doc, setDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/firebase";
 import { useAuthStore } from "@/authStore";
+import { useModalStore } from "@/modalStore";
 
 export default function WarehousesPage() {
   const { warehouses, addWarehouse, updateWarehouse, deleteWarehouse } = useWarehouseStore();
+  const { showAlert, showConfirm } = useModalStore();
   
   const [newWarehouseName, setNewWarehouseName] = useState("");
   const [newWarehouseAddress, setNewWarehouseAddress] = useState("");
@@ -41,13 +43,13 @@ export default function WarehousesPage() {
       return w;
   });
 
-  const handleAdd = (e: React.FormEvent) => {
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = newWarehouseName.trim();
     if (!name) return;
     
     if (normalizedWarehouses.find(w => w.name === name)) {
-        alert("Tên kho này đã tồn tại!");
+        await showAlert("Tên kho này đã tồn tại!");
         return;
     }
     
@@ -68,8 +70,8 @@ export default function WarehousesPage() {
     setNewReceiverName("");
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm(`Bạn có chắc chắn muốn xóa kho "${id}" khỏi danh sách?`)) {
+  const handleDelete = async (id: string) => {
+    if (await showConfirm(`Bạn có chắc chắn muốn xóa kho "${id}" khỏi danh sách?`)) {
         deleteWarehouse(id);
         deleteDoc(doc(db, 'warehouses', id));
     }

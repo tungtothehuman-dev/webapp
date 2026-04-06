@@ -5,10 +5,12 @@ import { useAuthStore } from '@/authStore';
 import { usePdfTaskStore, LogItem } from '@/pdfTaskStore';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useModalStore } from '@/modalStore';
 
 export default function UploadPDFPage() {
   const orders = useOrderStore((state) => state.orders);
   const { currentUser } = useAuthStore();
+  const { showAlert } = useModalStore();
   const router = useRouter();
   
   const { isProcessing, totalFiles, processedFiles, currentFilename, logs, startProcessing, clearTask } = usePdfTaskStore();
@@ -18,12 +20,12 @@ export default function UploadPDFPage() {
     if (!files || files.length === 0) return;
     
     if (orders.length === 0) {
-      alert("Bạn chưa tải lên file Excel. Vui lòng quay lại tab 'Tải Lên Excel' trước.");
+      await showAlert("Bạn chưa tải lên file Excel. Vui lòng quay lại tab 'Tải Lên Excel' trước.");
       return;
     }
 
     if (isProcessing) {
-      alert("Hệ thống đang bận xử lý, vui lòng chờ!");
+      await showAlert("Hệ thống đang bận xử lý, vui lòng chờ!");
       return;
     }
 

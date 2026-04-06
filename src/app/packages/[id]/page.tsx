@@ -4,6 +4,7 @@ import { usePackageStore, useOrderStore } from "@/store";
 import { useAuthStore } from "@/authStore";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
+import { useModalStore } from "@/modalStore";
 import Link from "next/link";
 import * as xlsx from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -16,6 +17,7 @@ export default function PackageDetailPage() {
     const { packages, deletePackage } = usePackageStore();
     const { orders, updateOrder } = useOrderStore();
     const { currentUser } = useAuthStore();
+    const { showAlert, showConfirm } = useModalStore();
     
     const [scanInput, setScanInput] = useState("");
     const scanInputRef = useRef<HTMLInputElement>(null);
@@ -47,11 +49,11 @@ export default function PackageDetailPage() {
         );
     }
 
-    const handleScanSubmit = (e: React.FormEvent) => {
+    const handleScanSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
         if (activePkg.status === 'Đã xuất kho Việt Nam') {
-            alert("Kiện hàng đã xuất kho! Không thể thêm mã mới.");
+            await showAlert("Kiện hàng đã xuất kho! Không thể thêm mã mới.");
             return;
         }
 
@@ -102,7 +104,7 @@ export default function PackageDetailPage() {
         const code = (orderMatchIdx !== -1 && orders[orderMatchIdx].Description) ? orders[orderMatchIdx].Description : rawCode;
 
         if (activePkg.orderDescriptions.includes(code)) {
-            alert(`Mã ${code} đã nằm trong kiện quản lý!`);
+            await showAlert(`Mã ${code} đã nằm trong kiện quản lý!`);
             setScanInput("");
             return;
         }
@@ -166,25 +168,25 @@ export default function PackageDetailPage() {
 
     const isClosed = activePkg.status === 'Đã xuất kho Việt Nam';
 
-    const togglePackageStatus = () => {
+    const togglePackageStatus = async () => {
         if (isClosed) {
-            if(confirm("Bạn có chắc muốn Mở lại kiện hàng này để tiếp tục quét đơn không?")) {
+            if(await showConfirm("Bạn có chắc muốn Mở lại kiện hàng này để tiếp tục quét đơn không?")) {
                 // Mở lại thì dùng trạng thái Đang xử lý hoặc Đóng kiện, và xóa ngày đóng
                 setPackage(activePkg, { status: 'Đóng kiện', closedAt: '' });
             }
         } else {
-            if(confirm("Xác nhận chốt kiện hàng và xuất kho? Mọi đơn hàng bên trong sẽ được khóa.")) {
+            if(await showConfirm("Xác nhận chốt kiện hàng và xuất kho? Mọi đơn hàng bên trong sẽ được khóa.")) {
                 const now = new Date();
                 const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} ${now.getDate().toString().padStart(2, '0')}/${(now.getMonth()+1).toString().padStart(2, '0')}/${now.getFullYear()}`;
                 
                 setPackage(activePkg, { status: 'Đã xuất kho Việt Nam', closedAt: timeString });
-                alert("Đã chốt kiện hàng thành công!");
+                await showAlert("Đã chốt kiện hàng thành công!");
             }
         }
     };
 
-    const handleRemoveOrder = (code: string) => {
-        if (!confirm(`Bạn có chắc muốn gỡ đơn ${code} khỏi kiện này?`)) return;
+    const handleRemoveOrder = async (code: string) => {
+        if (!await showConfirm(`Bạn có chắc muốn gỡ đơn ${code} khỏi kiện này?`)) return;
 
         // Xóa khỏi kiện
         const updatedOrderDescriptions = activePkg.orderDescriptions.filter((c: string) => c !== code);
@@ -223,31 +225,31 @@ export default function PackageDetailPage() {
         }
     };
 
-    const handleDeletePackage = () => {
+    const handleDeletePackage = async () => {
         if (isClosed) {
-            alert("Kiện hàng đã bị Đóng/Xuất kho! Bạn phải thao tác Mở lại kiện trước mới có quyền Hủy.");
+            await showAlert("Kiện hàng đã bị Đóng/Xuất kho! Bạn phải thao tác Mở lại kiện trước mới có quyền Hủy.");
             return;
         }
 
         if (activePkg.orderDescriptions.length > 0) {
-            alert("Lỗi: Kiện hàng đang chứa dữ liệu! Vui lòng thao tác 'Hủy' từng đơn hàng bên trong để làm rỗng kiện trước khi Hủy kiện.");
+            await showAlert("Lỗi: Kiện hàng đang chứa dữ liệu! Vui lòng thao tác 'Hủy' từng đơn hàng bên trong để làm rỗng kiện trước khi Hủy kiện.");
             return;
         }
 
-        if(confirm(`Bạn có chắc muốn hủy kiện rỗng ${activePkg.id}?`)) {
+        if(await showConfirm(`Bạn có chắc muốn hủy kiện rỗng ${activePkg.id}?`)) {
             deletePackage(activePkg.id);
             router.push('/packages');
         }
     };
 
-    const exportExcel = () => {
+    const exportExcel = async () => {
         const validCodes = activePkg.orderDescriptions.filter((code: string) => {
             const o = orders.find(x => x.Description === code);
             return o && o.Status === 'Đóng kiện';
         });
 
         if (validCodes.length === 0) {
-            alert("Không có đơn hàng thành công nào trong kiện để xuất!");
+            await showAlert("Không có đơn hàng thành công nào trong kiện để xuất!");
             return;
         }
 
@@ -544,7 +546,7 @@ export default function PackageDetailPage() {
                                                     <span className="px-3 py-1 bg-[#e8f5e9] text-[#2e7d32] border border-[#c8e6c9] rounded-full text-xs font-bold">Thành công</span>
                                                 ) : (
                                                     <button 
-                                                        onClick={() => alert(`Chi tiết lỗi của mã ${code}:\n\n${warningText}\n\nVui lòng Gỡ mã này ra khỏi kiện.`)}
+                                                        onClick={async () => await showAlert(`Chi tiết lỗi của mã ${code}:\n\n${warningText}\n\nVui lòng Gỡ mã này ra khỏi kiện.`)}
                                                         className="px-3 py-1 bg-red-100 text-red-600 border border-red-200 hover:bg-red-200 transition rounded-full text-xs font-bold flex items-center gap-1"
                                                         title={warningText}
                                                     >

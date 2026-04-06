@@ -5,9 +5,11 @@ import { useOrderStore } from "@/store";
 import { PDFDocument } from "pdf-lib";
 import { saveAs } from "file-saver";
 import JsBarcode from "jsbarcode";
+import { useModalStore } from "@/modalStore";
 
 export default function PrintBarcodePage() {
     const { orders } = useOrderStore();
+    const { showAlert } = useModalStore();
     const [inputList, setInputList] = useState("");
     const [isGenerating, setIsGenerating] = useState(false);
     
@@ -96,7 +98,7 @@ export default function PrintBarcodePage() {
             saveAs(blob, `Barcodes_Lo_Hang_${codes.length}_ma.pdf`);
         } catch (error) {
             console.error("Lỗi khi tạo PDF Barcode", error);
-            alert("Có lỗi xảy ra khi tạo Mã Vạch PDF.");
+            await showAlert("Có lỗi xảy ra khi tạo Mã Vạch PDF.");
         } finally {
             setIsGenerating(false);
         }

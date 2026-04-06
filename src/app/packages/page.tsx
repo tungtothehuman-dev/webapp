@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useOrderStore, usePackageStore, useWarehouseStore, PackageRow } from "@/store";
 import { useAuthStore } from "@/authStore";
 import { useRouter } from "next/navigation";
+import { useModalStore } from "@/modalStore";
 
 export default function PackagesPage() {
   const router = useRouter();
@@ -11,6 +12,7 @@ export default function PackagesPage() {
   const { packages, addPackage, deletePackage, clearPackages, updatePackage } = usePackageStore();
   const { warehouses } = useWarehouseStore();
   const { currentUser } = useAuthStore();
+  const { showAlert, showConfirm } = useModalStore();
 
   // Modals & Filters
   const [isCreating, setIsCreating] = useState(false);
@@ -69,13 +71,13 @@ export default function PackagesPage() {
   const totalPages = Math.ceil(displayedPackages.length / itemsPerPage);
   const paginatedPackages = displayedPackages.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  const handleClearPackages = () => {
+  const handleClearPackages = async () => {
       const hasData = packages.some(p => p.orderDescriptions && p.orderDescriptions.length > 0);
       if (hasData) {
-          alert("Lệnh bị từ chối: Đang có kiện chứa dữ liệu đơn hàng!\n\nBạn chỉ được phép ấn Xóa tất cả khi mọi kiện đều là kiện rỗng để tránh thất thoát dữ liệu.");
+          await showAlert("Lệnh bị từ chối: Đang có kiện chứa dữ liệu đơn hàng!\n\nBạn chỉ được phép ấn Xóa tất cả khi mọi kiện đều là kiện rỗng để tránh thất thoát dữ liệu.");
           return;
       }
-      if (confirm("Chắc chắn muốn xóa sạch danh sách tất cả các kiện RỖNG hiện tại không?")) {
+      if (await showConfirm("Chắc chắn muốn xóa sạch danh sách tất cả các kiện RỖNG hiện tại không?")) {
           clearPackages();
       }
   };
@@ -241,13 +243,13 @@ export default function PackagesPage() {
                                         {currentUser?.role !== 'support' && (
                                             <td className="px-5 py-3 whitespace-nowrap text-center">
                                                 <button 
-                                                    onClick={(e) => {
+                                                    onClick={async (e) => {
                                                         e.stopPropagation();
                                                         if (pkg.orderDescriptions && pkg.orderDescriptions.length > 0) {
-                                                            alert("Lệnh bị từ chối: Kiện hàng này đang chứa dữ liệu đơn hàng!\n\nVui lòng nhấp vào kiện để xem chi tiết và phải gỡ hết đơn thao tác ra thì mới có quyền xóa kiện này.");
+                                                            await showAlert("Lệnh bị từ chối: Kiện hàng này đang chứa dữ liệu đơn hàng!\n\nVui lòng nhấp vào kiện để xem chi tiết và phải gỡ hết đơn thao tác ra thì mới có quyền xóa kiện này.");
                                                             return;
                                                         }
-                                                        if (confirm(`Bạn có chắc muốn xóa vĩnh viễn kiện rỗng ${pkg.id} không?`)) {
+                                                        if (await showConfirm(`Bạn có chắc muốn xóa vĩnh viễn kiện rỗng ${pkg.id} không?`)) {
                                                             deletePackage(pkg.id);
                                                         }
                                                     }} 

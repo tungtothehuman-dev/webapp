@@ -383,7 +383,7 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                         TrackingNumber: matchRow.trackingNumber,
                         pdfUrl: pdfUrl,
                         ActionHistory: [...currentHistory, {
-                            action: `Ghép PDF Mây Auto (${matchRow.trackingNumber})`,
+                            action: `Ghép PDF AI Auto (${matchRow.trackingNumber})`,
                             user: currentUser?.displayName || 'Thuật toán (AI)',
                             timestamp: timeString
                         }]

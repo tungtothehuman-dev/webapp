@@ -9,6 +9,7 @@ import { saveAs } from 'file-saver';
 
 import JsBarcode from 'jsbarcode';
 import { PDFDocument } from 'pdf-lib';
+import { useModalStore } from '@/modalStore';
 
 export default function OrdersPage() {
   const orders = useOrderStore((state) => state.orders);
@@ -18,6 +19,7 @@ export default function OrdersPage() {
   const packages = usePackageStore((state) => state.packages);
   const warehouses = useWarehouseStore((state) => state.warehouses);
   const { currentUser } = useAuthStore();
+  const { showAlert, showConfirm, showPrompt, showLoading, closeModal } = useModalStore();
 
   const [selectedIndexes, setSelectedIndexes] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
@@ -53,7 +55,7 @@ export default function OrdersPage() {
       if (!uploadTargetId || !e.target.files || e.target.files.length === 0) return;
       const file = e.target.files[0];
       
-      showToast('Đang quét mã vạch từ PDF, vui lòng đợi...', 'info' as any);
+      showLoading('Đang quét mã vạch từ PDF, vui lòng đợi...');
       let finalTracking = "";
 
       try {
@@ -135,7 +137,7 @@ export default function OrdersPage() {
       }
 
       if (!finalTracking) {
-          showToast('Quét mã thất bại, tự động lọc Tracking từ tên File đính kèm.', 'warning' as any);
+          showLoading('Đang phân tích tên File đính kèm...', 'Quét PDF thất bại');
           const defaultTracking = file.name.replace(/\.pdf$/i, "").toUpperCase();
           const trackingClean = defaultTracking.replace(/\s/g, "");
           
@@ -194,12 +196,45 @@ export default function OrdersPage() {
               pdfUrl: pdfUrl,
           }); // Update local store
           
-          showToast('Đã tải lên và gắn thủ công thành công!', 'success');
+          closeModal();
+          await showAlert('Đã tải lên và gắn PDF thủ công thành công!', 'Thành công');
       } catch (err: any) {
-          showToast('Lỗi ghép bằng tay: ' + err.message, 'error');
+          closeModal();
+          await showAlert('Lỗi ghép bằng tay: ' + err.message, 'Lỗi');
       } finally {
           setUploadTargetId(null);
       }
+  };
+
+  const handleClearManualLabel = async (id: string, description: string) => {
+    if (!await showConfirm(`Bạn có chắc chắn muốn GỠ BỎ file PDF đã gắn cho mã đơn: ${description}?`)) return;
+    
+    showLoading('Đang xóa...');
+    try {
+        const { db } = await import('@/firebase');
+        const { doc, updateDoc } = await import('firebase/firestore');
+        const orderRef = doc(db, 'orders', id);
+        
+        await updateDoc(orderRef, {
+            TrackingNumber: null,
+            pdfUrl: null,
+            ActionHistory: [...(orders.find(o => o.id === id)?.ActionHistory || []), {
+                action: 'Gỡ bỏ thủ công file PDF',
+                user: currentUser?.displayName || 'Ẩn danh',
+                timestamp: new Date().toLocaleString()
+            }]
+        });
+        
+        updateOrder(id, {
+            TrackingNumber: "",
+            pdfUrl: undefined
+        });
+        closeModal();
+        await showAlert('Đã gỡ bỏ file PDF thành công!', 'Thành công');
+    } catch(e: any) {
+        closeModal();
+        await showAlert('Lỗi xóa PDF: ' + e.message, 'Lỗi');
+    }
   };
 
   // Đặt lại trang 1 khi người dùng Lọc hoặc Tìm kiếm
@@ -311,7 +346,7 @@ export default function OrdersPage() {
       printJS({ printable: base64Pdf, type: 'pdf', base64: true });
     } catch (error) {
       console.error("Lỗi khi tạo PDF Barcode", error);
-      alert("Có lỗi xảy ra khi tạo Mã Vạch PDF.");
+      await showAlert("Có lỗi xảy ra khi tạo Mã Vạch PDF.");
     }
   };
 
@@ -408,7 +443,7 @@ export default function OrdersPage() {
   const downloadSelectedLabels = async () => {
     const selectedOrders = orders.filter((_, idx) => selectedIndexes.has(idx)).filter(o => o.pdfUrl);
     if (selectedOrders.length === 0) {
-      alert("Không có Label PDF nào trong các đơn hàng đã chọn.");
+      await showAlert("Không có Label PDF nào trong các đơn hàng đã chọn.");
       return;
     }
     
@@ -429,13 +464,13 @@ export default function OrdersPage() {
       saveAs(zipContent, `Labels_THE_HUB_${new Date().getTime()}.zip`);
       
     } catch(e: any) {
-        alert("Lỗi khi tải/nén Label: " + e.message);
+        await showAlert("Lỗi khi tải/nén Label: " + e.message);
     }
   };
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (selectedIndexes.size === 0) {
-      alert("Vui lòng tích chọn ít nhất 1 đơn hàng để xuất Excel.");
+      await showAlert("Vui lòng tích chọn ít nhất 1 đơn hàng để xuất Excel.");
       return;
     }
 
@@ -444,19 +479,21 @@ export default function OrdersPage() {
     const templateHeaders = [
         "Sender Name", "Sender Company", "Sender Address1", "Sender Address2", "Sender City", "Sender State", "Sender Zipcode", "Sender Phone",
         "Receiver Name", "Receiver Company", "Receiver Address 1", "Receiver Address 2", "Receiver City", "Receiver State", "Receiver Zip", "Receiver Phone",
-        "Weight_lbs", "Length_inch", "Width_inch", "Height_inch", "Description", "TrackingNumber", "UploadDate", "Status", "pdfUrl", "id", "HUB"
+        "Weight (lbs)", "Length (in)", "Width (in)", "Height (in)", "Description", "Reference1", "Reference2", "SenderCountry", "ReceiverCountry", "TrackingNumber", "UploadDate", "Status", "pdfUrl", "id", "HUB"
     ];
 
     const cleanData = selectedOrders.map(order => {
       const { pdfBase64, ActionHistory, originalIndex, Status, ...rest } = order;
       
       const rowData: any = {};
-      templateHeaders.forEach(header => { rowData[header] = ""; }); // Tạo cột rỗng trước để tránh mất cột
+      templateHeaders.forEach(header => { rowData[header] = ""; });
 
-      rowData["Weight_lbs"] = rest.Weight_lbs || rest.Weight || "";
-      rowData["Length_inch"] = rest.Length_inch || rest.Length || "";
-      rowData["Width_inch"] = rest.Width_inch || rest.Width || "";
-      rowData["Height_inch"] = rest.Height_inch || rest.Height || "";
+      rowData["Weight (lbs)"] = rest["Weight (lbs)"] || rest.Weight_lbs || rest.Weight || "";
+      rowData["Length (in)"] = rest["Length (in)"] || rest.Length_inch || rest.Length || "";
+      rowData["Width (in)"] = rest["Width (in)"] || rest.Width_inch || rest.Width || "";
+      rowData["Height (in)"] = rest["Height (in)"] || rest.Height_inch || rest.Height || "";
+      rowData["SenderCountry"] = rest.SenderCountry || rest["Sender Country"] || "";
+      rowData["ReceiverCountry"] = rest.ReceiverCountry || rest["Receiver Country"] || "";
       rowData["HUB"] = rest.HUB || rest.Hub || "";
       rowData["Status"] = Status || 'Chờ xử lý';
 
@@ -501,12 +538,12 @@ export default function OrdersPage() {
   const isAllDisplayedSelected = paginatedOrders.length > 0 && paginatedOrders.every(item => selectedIndexes.has(item.originalIndex));
 
   const handleDeleteSelected = async () => {
-    if (!window.confirm(`XÁC NHẬN: Bạn có chắc chắn muốn XÓA VĨNH VIỄN ${selectedIndexes.size} đơn hàng đã tick chọn khỏi hệ thống Đám mây không?`)) {
+    if (!await showConfirm(`XÁC NHẬN: Bạn có chắc chắn muốn XÓA VĨNH VIỄN ${selectedIndexes.size} đơn hàng đã tick chọn khỏi hệ thống Đám mây không?`)) {
         return;
     }
-    const userInput = window.prompt("Vui lòng nhập MẬT KHẨU QUẢN TRỊ VIÊN để xác nhận xóa các đơn đã chọn:\n(Pass: admin123)");
+    const userInput = await showPrompt("Vui lòng nhập MẬT KHẨU QUẢN TRỊ VIÊN để xác nhận xóa các đơn đã chọn:\n(Pass: admin123)", "Xác thực Quản trị");
     if (userInput !== 'admin123') {
-        alert("❌ SAI MẬT KHẨU!");
+        if (userInput !== null) await showAlert("❌ SAI MẬT KHẨU!");
         return;
     }
 
@@ -541,9 +578,9 @@ export default function OrdersPage() {
         const remainingOrders = orders.filter((_, idx) => !selectedIndexes.has(idx));
         setOrders(remainingOrders);
         setSelectedIndexes(new Set());
-        alert(`Đã xóa thành công ${count} mã được chọn khỏi đám mây!`);
+        await showAlert(`Đã xóa thành công ${count} mã được chọn khỏi đám mây!`);
     } catch (err: any) {
-        alert("Lỗi khi xóa dữ liệu: " + err.message);
+        await showAlert("Lỗi khi xóa dữ liệu: " + err.message);
     } finally {
         setIsDeletingAll(false);
     }
@@ -552,15 +589,15 @@ export default function OrdersPage() {
   const handleBulkDeleteSubmit = async () => {
       const descriptions = bulkDeleteText.split(/[\n,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
       if (descriptions.length === 0) {
-          alert("Vui lòng nhập ít nhất 1 mã Description để xóa.");
+          await showAlert("Vui lòng nhập ít nhất 1 mã Description để xóa.");
           return;
       }
-      if (!window.confirm(`XÁC NHẬN: Hệ thống sẽ tiến hành rà soát và XÓA VĨNH VIỄN các đơn hàng thuộc ${descriptions.length} mã Description bạn cung cấp. Bạn có tự tin gõ đúng mã không?`)) {
+      if (!await showConfirm(`XÁC NHẬN: Hệ thống sẽ tiến hành rà soát và XÓA VĨNH VIỄN các đơn hàng thuộc ${descriptions.length} mã Description bạn cung cấp. Bạn có tự tin gõ đúng mã không?`)) {
           return;
       }
-      const userInput = window.prompt("Nhập MẬT KHẨU QUẢN TRỊ VIÊN để kích hoạt Lò Thiêu Đám Mây:\n(Pass: admin123)");
+      const userInput = await showPrompt("Nhập MẬT KHẨU QUẢN TRỊ VIÊN để kích hoạt Lò Thiêu Đám Mây:\n(Pass: admin123)", "Xác thực Quản trị");
       if (userInput !== 'admin123') {
-          alert("❌ SAI MẬT KHẨU!");
+          if (userInput !== null) await showAlert("❌ SAI MẬT KHẨU!");
           return;
       }
 
@@ -601,16 +638,16 @@ export default function OrdersPage() {
           }
 
           if (count === 0) {
-              alert("Không tìm thấy đơn hàng nào khớp với danh sách mã bạn nhập!");
+              await showAlert("Không tìm thấy đơn hàng nào khớp với danh sách mã bạn nhập!");
           } else {
               const remainingOrders = orders.filter(o => !idsToDelete.has(o.id));
               setOrders(remainingOrders);
               setSelectedIndexes(new Set());
               setBulkDeleteText("");
-              alert(`TUYỆT VỜI: Đã đốt thành tro ${count} đơn hàng thuộc danh sách mã bạn cung cấp khỏi mây!`);
+              await showAlert(`TUYỆT VỜI: Đã đốt thành tro ${count} đơn hàng thuộc danh sách mã bạn cung cấp khỏi mây!`);
           }
       } catch (err: any) {
-          alert("Lỗi khi xóa dữ liệu: " + err.message);
+          await showAlert("Lỗi khi xóa dữ liệu: " + err.message);
       } finally {
           setIsDeletingAll(false);
       }
@@ -846,7 +883,7 @@ export default function OrdersPage() {
                            const isManualMatch = order.ActionHistory?.some((h: any) => h.action && (h.action.includes("Ghép thủ công") || h.action.includes("Ghép tay")));
                            if (order.pdfUrl) {
                               return (
-                                 <div className="relative inline-flex items-center justify-center">
+                                  <div className="flex items-center justify-center gap-1.5 shrink-0">
                                     <button
                                        onClick={async () => {
                                            try {
@@ -868,13 +905,20 @@ export default function OrdersPage() {
                                        <span>Tải Label PDF</span>
                                     </button>
                                     {isManualMatch && (
-                                       <div className="absolute top-1/2 -translate-y-1/2 -right-8">
+                                        <div className="flex items-center gap-1 shrink-0">
                                           <button
                                             onClick={() => handleManualUploadClick(order.id)}
                                             title="Sửa / Up lại file khác"
-                                            className="p-1.5 text-amber-500 hover:bg-amber-100 hover:text-amber-700 border border-transparent hover:border-amber-200 rounded-md transition-colors"
+                                            className="p-1.5 text-amber-500 hover:bg-amber-100 hover:text-amber-700 border border-transparent hover:border-amber-200 rounded-md transition-colors shrink-0"
                                           >
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                          </button>
+                                          <button
+                                            onClick={() => handleClearManualLabel(order.id, order.Description || 'KhongMa')}
+                                            title="Xóa Label đã gắn thủ công khỏi đơn"
+                                            className="p-1.5 text-red-500 hover:bg-red-100 hover:text-red-700 border border-transparent hover:border-red-200 rounded-md transition-colors shrink-0"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                           </button>
                                        </div>
                                     )}
@@ -935,8 +979,8 @@ export default function OrdersPage() {
                                         import('@/firebase').then(({ db }) => {
                                             import('firebase/firestore').then(({ doc, updateDoc }) => {
                                                 const orderRef = doc(db, 'orders', order.id);
-                                                updateDoc(orderRef, { HUB: newValue, Hub: newValue }).catch(err => {
-                                                    alert("Lỗi khi lưu trữ kho: " + err.message);
+                                                updateDoc(orderRef, { HUB: newValue, Hub: newValue }).catch(async err => {
+                                                    await showAlert("Lỗi khi lưu trữ kho: " + err.message);
                                                 });
                                             });
                                         });
