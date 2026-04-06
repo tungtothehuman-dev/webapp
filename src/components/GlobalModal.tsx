@@ -105,7 +105,7 @@ export function GlobalModal() {
                 <input
                     ref={inputRef}
                     type={message.toLowerCase().includes('mật khẩu') ? 'password' : 'text'}
-                    autoComplete="new-password"
+                    autoComplete="off"
                     data-form-type="other"
                     data-lpignore="true"
                     className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-50 font-bold text-slate-800 transition-all text-center"
