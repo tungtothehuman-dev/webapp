@@ -356,8 +356,8 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                         const formData = new FormData();
                         formData.append("file", isolatedBlob, `${matchRow.trackingNumber}.pdf`);
                         formData.append("upload_preset", "THE HUB");
-                        // Gán tên file trên Cloudinary bằng chính mã OrderId để không bao giờ trùng lặp
-                        formData.append("public_id", matchRow.orderId);
+                        // Gán tên file trên Cloudinary bằng chính mã OrderId kết hợp mốc thời gian để không bao giờ trùng lặp
+                        formData.append("public_id", `${matchRow.orderId}_${Date.now()}`);
 
                         const response = await fetch("https://api.cloudinary.com/v1_1/dyjtyeokk/image/upload", {
                             method: "POST",
