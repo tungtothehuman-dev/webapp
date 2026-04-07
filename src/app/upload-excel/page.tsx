@@ -7,6 +7,7 @@ import * as xlsx from 'xlsx';
 import Link from 'next/link';
 import { db } from '@/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
+import { useAuthStore } from '@/authStore';
 
 type LogType = 'success' | 'error' | 'warning' | 'info';
 
@@ -18,6 +19,7 @@ interface LogItem {
 
 export default function UploadExcelPage() {
   const router = useRouter();
+  const { currentUser } = useAuthStore();
   const setOrders = useOrderStore((state) => state.setOrders);
   const existingOrders = useOrderStore((state) => state.orders);
   const warehouses = useWarehouseStore((state) => state.warehouses);
@@ -170,7 +172,7 @@ export default function UploadExcelPage() {
                 createdAt: Date.now() - index, // Đánh mốc thời gian chính xác để giữ đúng thứ tự Excel
                 ActionHistory: [{
                     action: 'Nạp dữ liệu vào máy chủ lưu trữ' + (matchedHub ? ` (Kho: ${matchedHub})` : ''),
-                    user: 'Hệ thống Admin',
+                    user: currentUser?.displayName || 'Ẩn danh',
                     timestamp: new Date().toISOString()
                 }]
             };
