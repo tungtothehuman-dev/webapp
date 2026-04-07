@@ -117,8 +117,8 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                     const textContent = await page.getTextContent();
                     let rawPdfText = textContent.items.map((item: any) => item.str).join(" ");
 
-                    // Bước 2: Chỉ khi file là ảnh chết (Scanned Label) mới phải gọi AI OCR
-                    if (rawPdfText.length < 30) {
+                    // Bước 2: Kích hoạt Scanner & OCR nếu text quá ngắn (Ảnh scan hoặc Label nửa mùa bị nén chữ)
+                    if (rawPdfText.length < 150) {
                         canvas.height = viewport.height;
                         canvas.width = viewport.width;
                         await page.render({ canvasContext: ctx, viewport: viewport }).promise;
