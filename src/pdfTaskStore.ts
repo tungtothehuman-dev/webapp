@@ -127,7 +127,9 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                             const codeReader = new BrowserMultiFormatReader();
                             const result = await codeReader.decodeFromImageUrl(canvas.toDataURL("image/png"));
                             let rawBarcode = result.getText().toUpperCase();
-                            barcodeText = rawBarcode.length > 22 ? rawBarcode.slice(-22) : rawBarcode;
+                            if (/^[A-Z0-9]+$/.test(rawBarcode.replace(/[-\s]/g, ''))) {
+                                barcodeText = rawBarcode.length > 22 ? rawBarcode.slice(-22) : rawBarcode;
+                            }
                         } catch (e) { }
 
                         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);

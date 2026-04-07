@@ -82,7 +82,11 @@ export default function OrdersPage() {
                   const codeReader = new BrowserMultiFormatReader();
                   const result = await codeReader.decodeFromImageUrl(canvas.toDataURL("image/png"));
                   let rawBarcode = result.getText().toUpperCase();
-                  finalTracking = rawBarcode.length > 22 ? rawBarcode.slice(-22) : rawBarcode;
+                  if (/^[A-Z0-9]+$/.test(rawBarcode.replace(/[-\s]/g, ''))) {
+                      finalTracking = rawBarcode.length > 22 ? rawBarcode.slice(-22) : rawBarcode;
+                  } else {
+                      console.warn("Bỏ qua mã vạch chứa ký tự lạ:", rawBarcode);
+                  }
               } catch (e) {
                   console.warn("ZXing failed. Attempting native text regex fallback...");
               }
