@@ -14,7 +14,7 @@ import { db } from '@/firebase';
 export default function PackageDetailPage() {
     const { id } = useParams() as { id: string };
     const router = useRouter();
-    const { packages, deletePackage } = usePackageStore();
+    const { packages, deletePackage, updatePackage } = usePackageStore();
     const { orders, updateOrder } = useOrderStore();
     const { currentUser } = useAuthStore();
     const { showAlert, showConfirm } = useModalStore();
@@ -25,11 +25,9 @@ export default function PackageDetailPage() {
     const [isScanning, setIsScanning] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
 
-    // Vì Zustand store chưa có updatePackage, ta tự viết hàm phụ
+    // Cập nhật dùng hàm updatePackage chuẩn từ store
     const setPackage = (activePkg: any, updates: any) => {
-        deletePackage(activePkg.id);
-        const { packages: _, addPackage, deletePackage: __, clearPackages: ___ } = usePackageStore.getState();
-        usePackageStore.getState().addPackage({ ...activePkg, ...updates });
+        updatePackage(activePkg.id, updates);
     };
 
     // Prevent hydration issues
@@ -255,7 +253,7 @@ export default function PackageDetailPage() {
 
         const templateHeaders = [
             "Sender Name", "Sender Company", "Sender Address1", "Sender Address2", "Sender City", "Sender State", "Sender Zipcode", "Sender Phone",
-            "Receiver Name", "Receiver Company", "Receiver Address 1", "Receiver Address 2", "Receiver City", "Receiver State", "Receiver Zip", "Receiver Phone",
+            "Receiver Name", "Receiver Company", "Receiver Address 1", "Receiver Address 2", "Receiver City", "Receiver State", "Receiver Zip", "Receiver Phone", "ReceiverCountry", "SenderCountry",
             "Weight_lbs", "Length_inch", "Width_inch", "Height_inch", "Description", "TrackingNumber", "UploadDate", "Status", "pdfUrl", "id", "HUB"
         ];
 
