@@ -479,7 +479,7 @@ export default function OrdersPage() {
     const templateHeaders = [
         "Sender Name", "Sender Company", "Sender Address1", "Sender Address2", "Sender City", "Sender State", "Sender Zipcode", "Sender Phone",
         "Receiver Name", "Receiver Company", "Receiver Address 1", "Receiver Address 2", "Receiver City", "Receiver State", "Receiver Zip", "Receiver Phone",
-        "Weight (lbs)", "Length (in)", "Width (in)", "Height (in)", "Description", "Reference1", "Reference2", "SenderCountry", "ReceiverCountry", "TrackingNumber", "UploadDate", "Status", "pdfUrl", "id", "HUB"
+        "Weight (lbs)", "Length (in)", "Width (in)", "Height (in)", "Description", "Reference1", "Reference2", "SenderCountry", "ReceiverCountry", "TrackingNumber", "UploadDate", "Status", "pdfUrl", "HUB"
     ];
 
     const cleanData = selectedOrders.map(order => {
@@ -498,7 +498,7 @@ export default function OrdersPage() {
       rowData["Status"] = Status || 'Chờ xử lý';
 
       Object.keys(rest).forEach(k => {
-          if (k !== 'Weight' && k !== 'Length' && k !== 'Width' && k !== 'Height' && k !== 'Hub' && !templateHeaders.includes(k)) {
+          if (k !== 'Weight' && k !== 'Length' && k !== 'Width' && k !== 'Height' && k !== 'Hub' && k !== 'createdAt' && k !== 'id' && !templateHeaders.includes(k)) {
               rowData[k] = rest[k];
           } else if (templateHeaders.includes(k) && rest[k]) {
               rowData[k] = rest[k];
