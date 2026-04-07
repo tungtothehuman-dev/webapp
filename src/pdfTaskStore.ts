@@ -190,13 +190,13 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                         
                         if (descUpper.length > 2) {
                             if (file.name.toUpperCase().includes(descUpper) || pdfClean.includes(descClean)) {
-                                if (order.pdfUrl || order.Status === 'Đã Hủy' || order.Status === 'Đóng kiện' || order.Status === 'Kho Mỹ đã scan') {
+                                if (order.pdfUrl || order.Status === 'Đã Hủy' || order.Status === 'Kho Mỹ đã scan') {
                                     isAlreadyFulfilled = true;
                                 }
                             }
                         }
 
-                        if (order.pdfUrl || order.Status === 'Đã Hủy' || order.Status === 'Đóng kiện' || order.Status === 'Kho Mỹ đã scan') continue;
+                        if (order.pdfUrl || order.Status === 'Đã Hủy' || order.Status === 'Kho Mỹ đã scan') continue;
 
                         const desc = (order["Description"] || "").toString().toUpperCase();
                         const trackingNumber = (order["TrackingNumber"] || "").toString().toUpperCase();
