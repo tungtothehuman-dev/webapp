@@ -69,7 +69,7 @@ export default function OrdersPage() {
           const pdfDocument = await loadingTask.promise;
           const page = await pdfDocument.getPage(1);
           
-          const viewport = page.getViewport({ scale: 1.5 });
+          const viewport = page.getViewport({ scale: 2.5 });
           const canvas = document.createElement("canvas");
           canvas.height = viewport.height;
           canvas.width = viewport.width;
@@ -93,10 +93,10 @@ export default function OrdersPage() {
           
           // Trích xuất text nhúng native (nếu có)
           const textContent = await page.getTextContent();
-          let fullTextStr = textContent.items.map((item: any) => item.str).join("").replace(/\s/g, "");
+          let fullTextStr = textContent.items.map((item: any) => item.str).join("").replace(/[\s\-_,\.]/g, "");
           
           const defaultTracking = file.name.replace(/\.pdf$/i, "").toUpperCase();
-          const trackingClean = defaultTracking.replace(/\s/g, "");
+          const trackingClean = defaultTracking.replace(/[\s\-_,\.]/g, "");
           const fnUsps = trackingClean.match(/(?:420\d{5})?(9\d{21})/);
           const fnUps = trackingClean.match(/1Z[A-Z0-9]{16}/i);
 
@@ -122,7 +122,7 @@ export default function OrdersPage() {
                  const ocrRes = await fetch("https://api.ocr.space/parse/image", { method: "POST", body: formData });
                  const ocrData = await ocrRes.json();
                  if (ocrData.ParsedResults && ocrData.ParsedResults.length > 0) {
-                     fullTextStr = (ocrData.ParsedResults[0].ParsedText || "").replace(/\s/g, "");
+                     fullTextStr = (ocrData.ParsedResults[0].ParsedText || "").replace(/[\s\-_,\.]/g, "");
                  }
              } catch(e) {
              }
@@ -130,7 +130,7 @@ export default function OrdersPage() {
 
           const txtUsps = fullTextStr.match(/(?:420\d{5})?(9\d{21})/);
           const txtUps = fullTextStr.match(/1Z[A-Z0-9]{16}/i);
-          const tenDigitsMatch = defaultTracking.match(/(?:^|\s)([\d]{10,22})(?:\s|$)/);
+          const tenDigitsMatch = defaultTracking.match(/(?:^|\s|\b)(\d{10,22})(?:\s|\b|$)/);
 
           // HỆ THỐNG ƯU TIÊN SỐ 1
           if (fnUsps && fnUsps[1]) {
