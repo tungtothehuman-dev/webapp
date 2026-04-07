@@ -595,7 +595,7 @@ export default function OrdersPage() {
       if (!await showConfirm(`XÁC NHẬN: Hệ thống sẽ tiến hành rà soát và XÓA VĨNH VIỄN các đơn hàng thuộc ${descriptions.length} mã Description bạn cung cấp. Bạn có tự tin gõ đúng mã không?`)) {
           return;
       }
-      const userInput = await showPrompt("Nhập MẬT KHẨU QUẢN TRỊ VIÊN để kích hoạt Lò Thiêu Đám Mây:\n(Pass: admin123)", "Xác thực Quản trị");
+      const userInput = await showPrompt("Nhập MẬT KHẨU QUẢN TRỊ VIÊN để xác nhận xóa dữ liệu hàng loạt:\n(Pass: admin123)", "Xác thực Quản trị");
       if (userInput !== 'admin123') {
           if (userInput !== null) await showAlert("❌ SAI MẬT KHẨU!");
           return;

@@ -61,7 +61,7 @@ export default function WarehousesPage() {
     };
     addWarehouse(newData);
     
-    // Đồng bộ lên Firebase Mây
+    // Đồng bộ lên hệ thống
     try {
         setDoc(doc(db, 'warehouses', name), newData);
     } catch(err) { console.error("Lỗi Firebase:", err); }

@@ -64,7 +64,7 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
             isProcessing: true,
             totalFiles: files.length,
             processedFiles: 0,
-            currentFilename: "Đang khởi động tiến trình quét Mây...",
+            currentFilename: "Đang khởi động tiến trình phân tích tự động...",
             logs: []
         });
 
@@ -330,8 +330,8 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                 return;
             }
 
-            set({ processedFiles: files.length, currentFilename: `Đang khóa tệp lưu Đám Mây (${matchCount} file)...` });
-            addLog('info', `Đang kết nối Database Đám Mây để niêm phong đơn hàng...`);
+            set({ processedFiles: files.length, currentFilename: `Đang khóa tệp lưu trữ (${matchCount} file)...` });
+            addLog('info', `Đang kết nối Database để niêm phong đơn hàng...`);
 
             const now = new Date();
             const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} ${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
@@ -343,7 +343,7 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                 const matchRow = mapData[fname];
                 if (!matchRow) continue;
 
-                set({ currentFilename: `Đẩy lên Đám Mây: ${matchRow.trackingNumber}...` });
+                set({ currentFilename: `Đồng bộ dữ liệu: ${matchRow.trackingNumber}...` });
 
                 try {
                     addLog('info', `[${fname}] Kích hoạt Ống đẩy siêu tốc (Cloudinary)...`);

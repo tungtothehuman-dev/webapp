@@ -195,7 +195,7 @@ export default function AccountsPage() {
                         </div>
                         <div className="col-span-full flex gap-3 mt-2">
                            <button type="submit" className="flex-1 bg-teal-500 hover:bg-teal-600 text-white font-bold py-4 rounded-xl shadow-md transition-colors text-lg">
-                               Lưu Lên Đám Mây
+                               Lưu Thông Tin
                            </button>
                            <button type="button" onClick={() => setIsFormOpen(false)} className="px-8 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl transition-colors">
                                Huỷ Bỏ
