@@ -253,8 +253,9 @@ export default function PackageDetailPage() {
 
         const templateHeaders = [
             "Sender Name", "Sender Company", "Sender Address1", "Sender Address2", "Sender City", "Sender State", "Sender Zipcode", "Sender Phone",
-            "Receiver Name", "Receiver Company", "Receiver Address 1", "Receiver Address 2", "Receiver City", "Receiver State", "Receiver Zip", "Receiver Phone", "ReceiverCountry", "SenderCountry",
-            "Weight_lbs", "Length_inch", "Width_inch", "Height_inch", "Description", "TrackingNumber", "UploadDate", "Status", "pdfUrl", "id", "HUB"
+            "Receiver Name", "Receiver Company", "Receiver Address 1", "Receiver Address 2", "Receiver City", "Receiver State", "Receiver Zip", "Receiver Phone",
+            "Weight (lbs)", "Length (in)", "Width (in)", "Height (in)", "Description", "Reference1", "Reference2", "SenderCountry", "ReceiverCountry", "TRACKING",
+            "UploadDate", "Status", "pdfUrl", "id", "HUB"
         ];
 
         const cleanData = validCodes.map((code: string) => {
@@ -265,15 +266,16 @@ export default function PackageDetailPage() {
             const rowData: any = {};
             templateHeaders.forEach(header => { rowData[header] = ""; }); // Khởi tạo rỗng để bảo tồn cột
 
-            rowData["Weight_lbs"] = rest.Weight_lbs || rest.Weight || "";
-            rowData["Length_inch"] = rest.Length_inch || rest.Length || "";
-            rowData["Width_inch"] = rest.Width_inch || rest.Width || "";
-            rowData["Height_inch"] = rest.Height_inch || rest.Height || "";
+            rowData["Weight (lbs)"] = rest["Weight (lbs)"] || rest.Weight_lbs || rest.Weight || "";
+            rowData["Length (in)"] = rest["Length (in)"] || rest.Length_inch || rest.Length || "";
+            rowData["Width (in)"] = rest["Width (in)"] || rest.Width_inch || rest.Width || "";
+            rowData["Height (in)"] = rest["Height (in)"] || rest.Height_inch || rest.Height || "";
+            rowData["TRACKING"] = rest.TrackingNumber || rest.TRACKING || "";
             rowData["HUB"] = rest.HUB || rest.Hub || "";
             rowData["Status"] = 'Đóng kiện';
 
             Object.keys(rest).forEach(k => {
-                if (k !== 'Weight' && k !== 'Length' && k !== 'Width' && k !== 'Height' && k !== 'Hub' && !templateHeaders.includes(k)) {
+                if (k !== 'Weight' && k !== 'Length' && k !== 'Width' && k !== 'Height' && k !== 'Hub' && k !== 'TrackingNumber' && !templateHeaders.includes(k)) {
                     rowData[k] = rest[k];
                 } else if (templateHeaders.includes(k) && rest[k]) {
                     rowData[k] = rest[k];
