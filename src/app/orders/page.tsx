@@ -159,7 +159,10 @@ export default function OrdersPage() {
           const formData = new FormData();
           formData.append("file", file, `${finalTracking}.pdf`);
           formData.append("upload_preset", "THE HUB");
-          formData.append("public_id", `${uploadTargetId}_${Date.now()}`);
+          
+          const uploadDate = new Date();
+          const folderName = `THE_HUB_LABELS/${uploadDate.getFullYear()}_${(uploadDate.getMonth() + 1).toString().padStart(2, '0')}`;
+          formData.append("public_id", `${folderName}/${uploadTargetId}_${Date.now()}`);
 
           const response = await fetch("https://api.cloudinary.com/v1_1/dyjtyeokk/image/upload", {
               method: "POST",
