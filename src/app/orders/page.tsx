@@ -75,6 +75,8 @@ export default function OrdersPage() {
           canvas.width = viewport.width;
           const ctx = canvas.getContext("2d");
           
+          let zxingTracking = "";
+
           if (ctx) {
               await page.render({ canvasContext: ctx, viewport: viewport }).promise;
 
@@ -83,81 +85,71 @@ export default function OrdersPage() {
                   const result = await codeReader.decodeFromImageUrl(canvas.toDataURL("image/png"));
                   let rawBarcode = result.getText().toUpperCase();
                   if (/^[A-Z0-9]+$/.test(rawBarcode.replace(/[-\s]/g, ''))) {
-                      finalTracking = rawBarcode.length > 22 ? rawBarcode.slice(-22) : rawBarcode;
-                  } else {
-                      console.warn("Bỏ qua mã vạch chứa ký tự lạ:", rawBarcode);
+                      zxingTracking = rawBarcode.length > 22 ? rawBarcode.slice(-22) : rawBarcode;
                   }
               } catch (e) {
-                  console.warn("ZXing failed. Attempting native text regex fallback...");
               }
           }
           
           // Trích xuất text nhúng native (nếu có)
-          if (!finalTracking) {
-              const textContent = await page.getTextContent();
-              let fullTextStr = textContent.items.map((item: any) => item.str).join("").replace(/\s/g, "");
-              
-              // Nếu file PDF là ảnh chết (Scanned Label) thì bật Lõi Trí Tuệ Kép OCR.Space
-              if (fullTextStr.length < 30 && ctx) {
-                 try {
-                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                     const data = imageData.data;
-                     for (let k = 0; k < data.length; k += 4) {
-                         const avg = (data[k] + data[k + 1] + data[k + 2]) / 3;
-                         const color = avg > 150 ? 255 : 0;
-                         data[k] = color; data[k + 1] = color; data[k + 2] = color;
-                     }
-                     ctx.putImageData(imageData, 0, 0);
-
-                     const imgBase64 = canvas.toDataURL("image/jpeg", 0.9);
-                     const formData = new FormData();
-                     formData.append("base64Image", imgBase64);
-                     formData.append("language", "eng");
-                     formData.append("isTable", "false");
-                     formData.append("apikey", "K84562098688957");
-                     
-                     const ocrRes = await fetch("https://api.ocr.space/parse/image", { method: "POST", body: formData });
-                     const ocrData = await ocrRes.json();
-                     if (ocrData.ParsedResults && ocrData.ParsedResults.length > 0) {
-                         fullTextStr = (ocrData.ParsedResults[0].ParsedText || "").replace(/\s/g, "");
-                     }
-                 } catch(e) {
-                     console.warn("Lỗi OCR.Space fallback:", e);
-                 }
-              }
-
-              // Tìm dãy số có dạng 9... dài 22 số (USPS chuẩn)
-              const uspsMatch = fullTextStr.match(/(?:420\d{5})?(9\d{21})/);
-              const upsMatch = fullTextStr.match(/1Z[A-Z0-9]{16}/i);
-              
-              if (uspsMatch && uspsMatch[1]) {
-                  finalTracking = uspsMatch[1];
-              } else if (upsMatch) {
-                  finalTracking = upsMatch[0].toUpperCase();
-              }
-          }
-      } catch (err) {
-          console.error("Lỗi khi tự động giải mã tracking PDF:", err);
-      }
-
-      if (!finalTracking) {
-          showLoading('Đang phân tích tên File đính kèm...', 'Quét PDF thất bại');
+          const textContent = await page.getTextContent();
+          let fullTextStr = textContent.items.map((item: any) => item.str).join("").replace(/\s/g, "");
+          
           const defaultTracking = file.name.replace(/\.pdf$/i, "").toUpperCase();
           const trackingClean = defaultTracking.replace(/\s/g, "");
-          
-          const fnMatch = trackingClean.match(/(?:420\d{5})?(9\d{21})/);
-          const upsMatch = trackingClean.match(/1Z[A-Z0-9]{16}/i);
-          const tenDigitsMatch = defaultTracking.match(/(?:^|\s)([\d]{10,22})(?:\s|$)/); // Bắt phần số nguyên khối dài (như mã DHL)
+          const fnUsps = trackingClean.match(/(?:420\d{5})?(9\d{21})/);
+          const fnUps = trackingClean.match(/1Z[A-Z0-9]{16}/i);
 
-          if (fnMatch && fnMatch[1]) {
-             finalTracking = fnMatch[1];
-          } else if (upsMatch) {
-             finalTracking = upsMatch[0].toUpperCase();
+          // Nếu file PDF là ảnh chết (Scanned Label) thì bật Lõi Trí Tuệ Kép OCR.Space
+          if (fullTextStr.length < 30 && ctx && !zxingTracking && !fnUsps && !fnUps) {
+             try {
+                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                 const data = imageData.data;
+                 for (let k = 0; k < data.length; k += 4) {
+                     const avg = (data[k] + data[k + 1] + data[k + 2]) / 3;
+                     const color = avg > 150 ? 255 : 0;
+                     data[k] = color; data[k + 1] = color; data[k + 2] = color;
+                 }
+                 ctx.putImageData(imageData, 0, 0);
+
+                 const imgBase64 = canvas.toDataURL("image/jpeg", 0.9);
+                 const formData = new FormData();
+                 formData.append("base64Image", imgBase64);
+                 formData.append("language", "eng");
+                 formData.append("isTable", "false");
+                 formData.append("apikey", "K84562098688957");
+                 
+                 const ocrRes = await fetch("https://api.ocr.space/parse/image", { method: "POST", body: formData });
+                 const ocrData = await ocrRes.json();
+                 if (ocrData.ParsedResults && ocrData.ParsedResults.length > 0) {
+                     fullTextStr = (ocrData.ParsedResults[0].ParsedText || "").replace(/\s/g, "");
+                 }
+             } catch(e) {
+             }
+          }
+
+          const txtUsps = fullTextStr.match(/(?:420\d{5})?(9\d{21})/);
+          const txtUps = fullTextStr.match(/1Z[A-Z0-9]{16}/i);
+          const tenDigitsMatch = defaultTracking.match(/(?:^|\s)([\d]{10,22})(?:\s|$)/);
+
+          // HỆ THỐNG ƯU TIÊN SỐ 1
+          if (fnUsps && fnUsps[1]) {
+             finalTracking = fnUsps[1]; // Ưu tiên cao nhất: Tên file là mã USPS chuẩn
+          } else if (fnUps) {
+             finalTracking = fnUps[0].toUpperCase();
+          } else if (txtUsps && txtUsps[1]) {
+             finalTracking = txtUsps[1]; // Kế đến: Chữ trong PDF có chứa mã USPS chuẩn
+          } else if (txtUps) {
+             finalTracking = txtUps[0].toUpperCase();
+          } else if (zxingTracking) {
+             finalTracking = zxingTracking; // Fallback: Mã barcode lẻ quét được (như T...)
           } else if (tenDigitsMatch && tenDigitsMatch[1]) {
              finalTracking = tenDigitsMatch[1];
           } else {
              finalTracking = defaultTracking; 
           }
+      } catch (err) {
+          console.error("Lỗi khi tự động giải mã tracking PDF:", err);
       }
       
       try {
