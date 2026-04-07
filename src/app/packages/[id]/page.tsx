@@ -255,7 +255,7 @@ export default function PackageDetailPage() {
             "Sender Name", "Sender Company", "Sender Address1", "Sender Address2", "Sender City", "Sender State", "Sender Zipcode", "Sender Phone",
             "Receiver Name", "Receiver Company", "Receiver Address 1", "Receiver Address 2", "Receiver City", "Receiver State", "Receiver Zip", "Receiver Phone",
             "Weight (lbs)", "Length (in)", "Width (in)", "Height (in)", "Description", "Reference1", "Reference2", "SenderCountry", "ReceiverCountry", "TRACKING",
-            "UploadDate", "Status", "pdfUrl", "id", "HUB"
+            "UploadDate", "pdfUrl", "HUB"
         ];
 
         const cleanData = validCodes.map((code: string) => {
@@ -272,10 +272,9 @@ export default function PackageDetailPage() {
             rowData["Height (in)"] = rest["Height (in)"] || rest.Height_inch || rest.Height || "";
             rowData["TRACKING"] = rest.TrackingNumber || rest.TRACKING || "";
             rowData["HUB"] = rest.HUB || rest.Hub || "";
-            rowData["Status"] = 'Đóng kiện';
 
             Object.keys(rest).forEach(k => {
-                if (k !== 'Weight' && k !== 'Length' && k !== 'Width' && k !== 'Height' && k !== 'Hub' && k !== 'TrackingNumber' && !templateHeaders.includes(k)) {
+                if (k !== 'Weight' && k !== 'Length' && k !== 'Width' && k !== 'Height' && k !== 'Hub' && k !== 'TrackingNumber' && k !== 'createdAt' && k !== 'Status' && k !== 'id' && !templateHeaders.includes(k)) {
                     rowData[k] = rest[k];
                 } else if (templateHeaders.includes(k) && rest[k]) {
                     rowData[k] = rest[k];
@@ -284,7 +283,7 @@ export default function PackageDetailPage() {
 
             rowData['Trạng thái'] = 'Đóng kiện';
             rowData['Kiện Hàng'] = activePkg.id;
-            rowData['Master Tracking'] = activePkg.masterTracking || "Chưa có";
+            rowData['Track Kiện'] = activePkg.masterTracking || "Chưa có";
             return rowData;
         });
 
@@ -293,12 +292,12 @@ export default function PackageDetailPage() {
 
         const finalHeaders: string[] = [...templateHeaders];
         allKeys.forEach(k => {
-            if (!finalHeaders.includes(k) && k !== 'Trạng thái' && k !== 'Kiện Hàng' && k !== 'Master Tracking') {
+            if (!finalHeaders.includes(k) && k !== 'Trạng thái' && k !== 'Kiện Hàng' && k !== 'Track Kiện') {
                 finalHeaders.push(k);
             }
         });
 
-        finalHeaders.push('Trạng thái', 'Kiện Hàng', 'Master Tracking');
+        finalHeaders.push('Trạng thái', 'Kiện Hàng', 'Track Kiện');
 
         // Báo cho xlsx biết tao muốn ép theo cấu trúc này
         const worksheet = xlsx.utils.json_to_sheet(cleanData, { header: finalHeaders });
