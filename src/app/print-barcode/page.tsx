@@ -41,8 +41,12 @@ export default function PrintBarcodePage() {
                 ctx.fillStyle = "#ffffff";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+                const getSafeBarcodeValue = (str: string) => {
+                    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D");
+                };
+
                 const tempCanvas = document.createElement("canvas");
-                JsBarcode(tempCanvas, code, {
+                JsBarcode(tempCanvas, getSafeBarcodeValue(code), {
                     text: code,
                     height: 180,   // Giảm chiều cao xuống cho lùn bớt
                     width: 5,      // Dày nét vẽ 5
