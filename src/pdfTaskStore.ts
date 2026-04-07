@@ -15,9 +15,9 @@ if (typeof window !== "undefined") {
 const fuzzyMatch = (target: string, text: string) => {
     if (!target || target.length < 4) return text.includes(target);
     if (text.includes(target)) return true;
-    
+
     const maxErrors = Math.floor(target.length / 5) + 1; // Tolerance: 1 lỗi / 5 kí tự
-    
+
     for (let i = 0; i <= text.length - target.length; i++) {
         if (distance(target, text.substring(i, i + target.length)) <= maxErrors) return true;
         if (distance(target, text.substring(i, i + target.length + 1)) <= maxErrors) return true;
@@ -104,7 +104,7 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                     const clonedBuffer = originalBuffer.slice(0);
                     const pdf = await pdfjsLib.getDocument(clonedBuffer).promise;
                     const page = await pdf.getPage(1);
-                    const viewport = page.getViewport({ scale: 2.0 });
+                    const viewport = page.getViewport({ scale: 2.5 });
 
                     const canvas = document.createElement("canvas");
                     const ctx = canvas.getContext("2d");
@@ -182,12 +182,12 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
 
                     for (let j = 0; j < orders.length; j++) {
                         const order = orders[j];
-                        
+
                         // Kiểm tra trinh sát: Nếu có dấu hiệu khớp File nhưng đơn đã đóng
                         const description = (order["Description"] || "").toString().trim();
                         const descUpper = description.toUpperCase();
                         const descClean = descUpper.replace(/[\s\-_,\.]/g, "");
-                        
+
                         if (descUpper.length > 2) {
                             if (file.name.toUpperCase().includes(descUpper) || pdfClean.includes(descClean)) {
                                 if (order.pdfUrl || order.Status === 'Đã Hủy' || order.Status === 'Kho Mỹ đã scan') {
@@ -216,25 +216,26 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                         let isDescMatch = false;
 
                         if (desc.length > 2) {
+                            if (pdfClean.includes(dClean)) {
+                                isDescMatch = true;
+                            }
                             const upperFileName = file.name.toUpperCase();
                             if (upperFileName.includes(desc)) {
-                                isDescMatch = true;
-                            } else if (pdfClean.includes(dClean)) {
-                                isDescMatch = true;
+                                score += 200; // Điểm phụ vui theo yêu cầu
                             }
                         }
                         if (isDescMatch) { score += 1000; }
 
                         // 3. Chấm điểm Tên và Địa chỉ (Dùng FUZZY MATCH để chống lỗi từ OCR)
-                        const addressStr = (order["Receiver Address 1"] || "").toString().toUpperCase(); 
-                        const addressClean = addressStr.replace(/[\s\-_,\.]/g, ""); 
+                        const addressStr = (order["Receiver Address 1"] || "").toString().toUpperCase();
+                        const addressClean = addressStr.replace(/[\s\-_,\.]/g, "");
                         let addrMatch = false;
                         let nmMatch = false;
 
-                        if (addressClean.length > 5 && fuzzyMatch(addressClean, pdfClean)) { 
-                            score += 1000; 
+                        if (addressClean.length > 5 && fuzzyMatch(addressClean, pdfClean)) {
+                            score += 1000;
                             addrMatch = true;
-                        } 
+                        }
                         if (nameClean.length > 2 && fuzzyMatch(nameClean, pdfClean)) {
                             score += 1000;
                             nmMatch = true;
@@ -244,7 +245,7 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                             bestScore = score;
                             matchedIndex = j;
                             const isNameAddrMatched = (addrMatch || nmMatch);
-                            
+
                             if (isDescMatch && !isNameAddrMatched) {
                                 bestFailReason = `Đã khớp Mã Đơn (${desc}) nhưng LỆCH TÊN NGƯỜI NHẬN / ĐỊA CHỈ`;
                             } else if (!isDescMatch && isNameAddrMatched) {
@@ -256,33 +257,33 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                     }
 
                     let finalTracking = barcodeText;
-                    
+
                     if (!finalTracking) {
-                         const uspsMatch = pdfClean.match(/(?:420\d{5})?(9\d{21})/);
-                         const upsMatch = pdfClean.match(/1Z[A-Z0-9]{16}/i);
-                         if (uspsMatch && uspsMatch[1]) {
-                             finalTracking = uspsMatch[1];
-                         } else if (upsMatch) {
-                             finalTracking = upsMatch[0].toUpperCase();
-                         }
+                        const uspsMatch = pdfClean.match(/(?:420\d{5})?(9\d{21})/);
+                        const upsMatch = pdfClean.match(/1Z[A-Z0-9]{16}/i);
+                        if (uspsMatch && uspsMatch[1]) {
+                            finalTracking = uspsMatch[1];
+                        } else if (upsMatch) {
+                            finalTracking = upsMatch[0].toUpperCase();
+                        }
                     }
 
                     if (!finalTracking) {
-                         const defaultTracking = file.name.replace(/\.pdf$/i, "").toUpperCase();
-                         const trackingClean = defaultTracking.replace(/\s/g, "");
-                         const fnUsps = trackingClean.match(/(?:420\d{5})?(9\d{21})/);
-                         const fnUps = trackingClean.match(/1Z[A-Z0-9]{16}/i);
-                         const tenDigitsMatch = defaultTracking.match(/(?:^|\s)([\d]{10,22})(?:\s|$)/);
+                        const defaultTracking = file.name.replace(/\.pdf$/i, "").toUpperCase();
+                        const trackingClean = defaultTracking.replace(/[\s\-_,\.]/g, "");
+                        const fnUsps = trackingClean.match(/(?:420\d{5})?(9\d{21})/);
+                        const fnUps = trackingClean.match(/1Z[A-Z0-9]{16}/i);
+                        const tenDigitsMatch = defaultTracking.match(/(?:^|\s|\b)(\d{10,22})(?:\s|\b|$)/);
 
-                         if (fnUsps && fnUsps[1]) {
-                             finalTracking = fnUsps[1];
-                         } else if (fnUps) {
-                             finalTracking = fnUps[0].toUpperCase();
-                         } else if (tenDigitsMatch && tenDigitsMatch[1]) {
-                             finalTracking = tenDigitsMatch[1];
-                         } else {
-                             finalTracking = defaultTracking;
-                         }
+                        if (fnUsps && fnUsps[1]) {
+                            finalTracking = fnUsps[1];
+                        } else if (fnUps) {
+                            finalTracking = fnUps[0].toUpperCase();
+                        } else if (tenDigitsMatch && tenDigitsMatch[1]) {
+                            finalTracking = tenDigitsMatch[1];
+                        } else {
+                            finalTracking = defaultTracking;
+                        }
                     }
 
                     // TỐI QUAN TRỌNG: Ngưỡng khắt khe 2000 điểm (SONG SONG 2 YẾU TỐ BẮT BUỘC)
@@ -392,7 +393,7 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                             timestamp: timeString
                         }]
                     });
-                    
+
                     fileResults.push({
                         "Tên File PDF": fname,
                         "Mã ĐH ghép chuẩn": matchRow.description,
@@ -400,7 +401,7 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                         "Trạng thái": "Thành công",
                         "Nguyên nhân": "Ghép cặp chuẩn xác tuyệt đối"
                     });
-                    
+
                     addLog('success', `[${fname}] Hoàn tất niêm phong!`);
                     cloudSuccess++;
                 } catch (err: any) {
@@ -422,7 +423,7 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
             if (tesseractWorker) {
                 try { await tesseractWorker.terminate(); } catch (e) { }
             }
-            
+
             // XUẤT FILE EXCEL BÁO CÁO CÁC FILE THÀNH CÔNG / THẤT BẠI
             if (fileResults.length > 0) {
                 try {
@@ -430,7 +431,7 @@ export const usePdfTaskStore = create<PdfTaskState>((set, get) => ({
                     const worksheet = XLSX.utils.json_to_sheet(fileResults);
                     const workbook = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(workbook, worksheet, "Log Result");
-                    
+
                     const timeStr = new Date().toISOString().replace(/[:.]/g, '-');
                     XLSX.writeFile(workbook, `Log_Pdf_Scan_${timeStr}.xlsx`);
                     addLog('success', 'Đã lưu file Báo Cáo Kết Quả Excel về máy!');
