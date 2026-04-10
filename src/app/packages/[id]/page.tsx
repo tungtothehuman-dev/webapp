@@ -245,7 +245,7 @@ export default function PackageDetailPage() {
     const exportExcel = async () => {
         const validCodes = activePkg.orderDescriptions.filter((code: string) => {
             const o = orders.find(x => x.Description === code);
-            return o && o.Status === 'Đóng kiện';
+            return o && (o.Status === 'Đóng kiện' || o.Status === 'Kho Mỹ đã scan');
         });
 
         if (validCodes.length === 0) {
@@ -382,7 +382,7 @@ export default function PackageDetailPage() {
                                 const orderData = orders.find(x => x.Description === code);
                                 if (!orderData) return false;
                                 const pkgContainingOrder = packages.find(p => p.id !== activePkg.id && p.orderDescriptions.includes(code));
-                                return !pkgContainingOrder && orderData.Status === 'Đóng kiện';
+                                return !pkgContainingOrder && (orderData.Status === 'Đóng kiện' || orderData.Status === 'Kho Mỹ đã scan');
                             }).length}
                         </span>
                         <span className="text-xs font-bold text-slate-400">/ {activePkg.orderDescriptions.length}</span>
@@ -530,7 +530,7 @@ export default function PackageDetailPage() {
                                             warningText = `Lỗi trùng lặp: Mã này đang nằm ở kiện [${pkgContainingOrder.id}]`;
                                         } else if (isHubErr) {
                                             warningText = `Lỗi sai HUB: Đơn thuộc Trạm [${orderData.HUB || orderData.Hub}] bị quét nhầm vào kiện của Kho [${activePkg.destination}]`;
-                                        } else if (orderData.Status === 'Đóng kiện') {
+                                        } else if (orderData.Status === 'Đóng kiện' || orderData.Status === 'Kho Mỹ đã scan') {
                                             isSuccess = true;
                                         } else {
                                             warningText = `Lỗi sai trạng thái: Đơn này đang là [${orderData.Status || 'Chưa rõ'}] (Yêu cầu: Chờ xử lý)`;

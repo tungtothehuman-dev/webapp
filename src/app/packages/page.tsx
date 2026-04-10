@@ -173,7 +173,7 @@ export default function PackagesPage() {
                                     const orderData = orders.find(x => x.Description === code);
                                     if (!orderData) return false;
                                     const pkgContainingOrder = packages.find(p => p.id !== pkg.id && p.orderDescriptions.includes(code));
-                                    return !pkgContainingOrder && orderData.Status === 'Đóng kiện';
+                                    return !pkgContainingOrder && (orderData.Status === 'Đóng kiện' || orderData.Status === 'Kho Mỹ đã scan');
                                 }).length;
 
                                 return (
