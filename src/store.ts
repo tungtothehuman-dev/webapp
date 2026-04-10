@@ -58,6 +58,7 @@ export interface PackageRow {
 
 interface PackageStore {
   packages: PackageRow[];
+  setPackages: (pkgs: PackageRow[]) => void;
   addPackage: (pkg: PackageRow) => void;
   deletePackage: (id: string) => void;
   clearPackages: () => void;
@@ -68,6 +69,7 @@ export const usePackageStore = create<PackageStore>()(
   persist(
     (set) => ({
       packages: [],
+      setPackages: (pkgs) => set({ packages: pkgs }),
       addPackage: (pkg) => set((state) => ({ packages: [pkg, ...state.packages] })),
       deletePackage: (id) => set((state) => ({ packages: state.packages.filter(p => p.id !== id) })),
       clearPackages: () => set({ packages: [] }),

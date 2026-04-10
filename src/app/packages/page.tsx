@@ -5,6 +5,8 @@ import { useOrderStore, usePackageStore, useWarehouseStore, PackageRow } from "@
 import { useAuthStore } from "@/authStore";
 import { useRouter } from "next/navigation";
 import { useModalStore } from "@/modalStore";
+import { db } from '@/firebase';
+import { doc, setDoc, deleteDoc, writeBatch, collection, getDocs } from 'firebase/firestore';
 
 export default function PackagesPage() {
   const router = useRouter();
@@ -53,6 +55,9 @@ export default function PackagesPage() {
       };
 
       addPackage(newPkg);
+      // Đẩy lên Firebase để đồng bộ sang các máy khác
+      setDoc(doc(db, 'packages', newId), newPkg).catch(e => console.error("Lỗi tạo kiện trên mây:", e));
+      
       setIsCreating(false);
       router.push(`/packages/${newId}`);
   };
@@ -79,6 +84,15 @@ export default function PackagesPage() {
       }
       if (await showConfirm("Chắc chắn muốn xóa sạch danh sách tất cả các kiện RỖNG hiện tại không?")) {
           clearPackages();
+          // Xóa toàn bộ kiện trên Firebase
+          try {
+              const snapshot = await getDocs(collection(db, 'packages'));
+              const batch = writeBatch(db);
+              snapshot.docs.forEach(d => batch.delete(d.ref));
+              await batch.commit();
+          } catch (e) {
+              console.error("Lỗi xóa hàng loạt kiện:", e);
+          }
       }
   };
 
@@ -251,6 +265,7 @@ export default function PackagesPage() {
                                                         }
                                                         if (await showConfirm(`Bạn có chắc muốn xóa vĩnh viễn kiện rỗng ${pkg.id} không?`)) {
                                                             deletePackage(pkg.id);
+                                                            deleteDoc(doc(db, 'packages', pkg.id)).catch(e => console.error("Lỗi xóa kiện trên mây:", e));
                                                         }
                                                     }} 
                                                     className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-xl transition-all border border-transparent hover:border-red-100 opacity-60 group-hover:opacity-100"

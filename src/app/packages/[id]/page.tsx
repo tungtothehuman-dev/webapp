@@ -25,9 +25,10 @@ export default function PackageDetailPage() {
     const [isScanning, setIsScanning] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
 
-    // Cập nhật dùng hàm updatePackage chuẩn từ store
+    // Cập nhật dùng hàm updatePackage chuẩn từ store và lưu Firebase
     const setPackage = (activePkg: any, updates: any) => {
         updatePackage(activePkg.id, updates);
+        updateDoc(doc(db, 'packages', activePkg.id), updates).catch(e => console.error("Lỗi đồng bộ chi tiết kiện:", e));
     };
 
     // Prevent hydration issues
@@ -236,6 +237,7 @@ export default function PackageDetailPage() {
 
         if(await showConfirm(`Bạn có chắc muốn hủy kiện rỗng ${activePkg.id}?`)) {
             deletePackage(activePkg.id);
+            import('firebase/firestore').then(({ deleteDoc, doc }) => deleteDoc(doc(db, 'packages', activePkg.id)).catch(e=>console.error(e)));
             router.push('/packages');
         }
     };

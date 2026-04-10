@@ -34,7 +34,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (mounted && currentUser) {
       import('@/firebase').then(({ db }) => {
-        import('firebase/firestore').then(({ collection, onSnapshot, setDoc, doc }) => {
+        import('firebase/firestore').then(({ collection, onSnapshot, setDoc, doc, writeBatch }) => {
           const unsubscribeOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
              let docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
              
@@ -74,6 +74,48 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
              } else {
                  useWarehouseStore.getState().setWarehouses(docs);
              }
+          });
+
+          // Lắng nghe dữ liệu Kiện Hàng (Packages) & Kích hoạt cơ chế Phục Hồi Dữ Liệu
+          const unsubscribePackages = onSnapshot(collection(db, 'packages'), async (snapshot) => {
+             let docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+             
+             // --- Tự động phục hồi (Auto-Recovery) ---
+             // Đồng bộ các kiện đang kẹt trong LocalStorage của máy cũ lên đám mây
+             const localPackages = usePackageStore.getState().packages;
+             if (localPackages.length > 0) {
+                 const firebaseIds = new Set(docs.map(d => d.id));
+                 const missingPackages = localPackages.filter(p => !firebaseIds.has(p.id));
+                 
+                 if (missingPackages.length > 0) {
+                     const batch = writeBatch(db);
+                     missingPackages.forEach(pkg => {
+                         batch.set(doc(db, 'packages', pkg.id), pkg);
+                     });
+                     try { 
+                         await batch.commit(); 
+                         // Lắng nghe tiếp theo snapshot sẽ tự kéo data đã migrate xuống
+                         return;
+                     } catch (e) {
+                         console.error("Lỗi đồng bộ Recovery kiện hàng:", e);
+                     }
+                 }
+             }
+             
+             // Sort kiện mới nhất lên trên
+             docs.sort((a, b) => {
+                const parseTime = (dateStr: string) => {
+                    if (!dateStr || typeof dateStr !== 'string') return 0;
+                    const parts = dateStr.trim().split(" ");
+                    if (parts.length < 2) return 0;
+                    const [hours, minutes] = parts[0].split(":");
+                    const [day, month, year] = parts[1].split("/");
+                    return new Date(Number(year), Number(month) - 1, Number(day), Number(hours), Number(minutes)).getTime() || 0;
+                };
+                return parseTime(b.createdAt) - parseTime(a.createdAt);
+             });
+             
+             usePackageStore.getState().setPackages(docs);
           });
         });
       });
