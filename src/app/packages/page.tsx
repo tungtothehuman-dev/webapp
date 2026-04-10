@@ -6,7 +6,7 @@ import { useAuthStore } from "@/authStore";
 import { useRouter } from "next/navigation";
 import { useModalStore } from "@/modalStore";
 import { db } from '@/firebase';
-import { doc, setDoc, deleteDoc, writeBatch, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, writeBatch, collection, getDocs } from 'firebase/firestore';
 
 export default function PackagesPage() {
   const router = useRouter();
@@ -40,9 +40,24 @@ export default function PackagesPage() {
       
       // Đếm số lượng kiện được tạo trong ngày hôm nay cho kho này để tính số thứ tự
       const countToday = packages.filter(p => p.id.startsWith(prefix)).length;
-      const sequenceNum = countToday + 1;
+      let sequence = countToday + 1;
+      let newId = `${prefix}-${sequence}`;
 
-      const newId = `${prefix}-${sequenceNum}`;
+      // Bốc số thứ tự an toàn: Lên mây check xem có ai vừa tạo mã này không, nếu có thì tăng số lên 1
+      let isIdUsed = true;
+      try {
+          while (isIdUsed) {
+              const docSnap = await getDoc(doc(db, 'packages', newId));
+              if (docSnap.exists()) {
+                  sequence++;
+                  newId = `${prefix}-${sequence}`;
+              } else {
+                  isIdUsed = false;
+              }
+          }
+      } catch (e) {
+          console.error("Lỗi getDoc rà trùng lặp:", e);
+      }
 
       const newPkg: PackageRow = {
           id: newId,
