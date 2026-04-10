@@ -76,29 +76,20 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
              }
           });
 
-          // Lắng nghe dữ liệu Kiện Hàng (Packages) & Kích hoạt cơ chế Phục Hồi Dữ Liệu
-          const unsubscribePackages = onSnapshot(collection(db, 'packages'), async (snapshot) => {
+          // Lắng nghe dữ liệu Kiện Hàng (Packages)
+          const unsubscribePackages = onSnapshot(collection(db, 'packages'), (snapshot) => {
              let docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
              
-             // --- Tự động phục hồi (Auto-Recovery) ---
-             // Đồng bộ các kiện đang kẹt trong LocalStorage của máy cũ lên đám mây
+             // Thuật toán MERGE: Trộn lẫn các kiện hiện đang kẹt trong LocalStorage nhưng chưa lên mây
+             // Để tránh tình trạng Firebase ghi đè làm mất kiện của khách chưa kịp Ép Đồng Bộ
              const localPackages = usePackageStore.getState().packages;
              if (localPackages.length > 0) {
                  const firebaseIds = new Set(docs.map(d => d.id));
                  const missingPackages = localPackages.filter(p => !firebaseIds.has(p.id));
                  
                  if (missingPackages.length > 0) {
-                     const batch = writeBatch(db);
-                     missingPackages.forEach(pkg => {
-                         batch.set(doc(db, 'packages', pkg.id), pkg);
-                     });
-                     try { 
-                         await batch.commit(); 
-                         // Lắng nghe tiếp theo snapshot sẽ tự kéo data đã migrate xuống
-                         return;
-                     } catch (e) {
-                         console.error("Lỗi đồng bộ Recovery kiện hàng:", e);
-                     }
+                     // Nhét tạm vào list hiển thị để không bị biến mất trên màn hình
+                     docs = [...docs, ...missingPackages];
                  }
              }
              
