@@ -128,7 +128,32 @@ export default function PackagesPage() {
                 </div>
                 
                 <div className="flex items-center gap-3 shrink-0">
-
+                   <button 
+                       onClick={async () => {
+                           try {
+                               const snapshot = await getDocs(collection(db, 'packages'));
+                               const firebaseIds = new Set(snapshot.docs.map(d => d.id));
+                               const missingPackages = packages.filter(p => !firebaseIds.has(p.id));
+                               
+                               if (missingPackages.length === 0) {
+                                   await showAlert("Mọi kiện hàng trên máy này đều đã được đồng bộ lên Mây!");
+                                   return;
+                               }
+                               
+                               const batch = writeBatch(db);
+                               missingPackages.forEach(pkg => batch.set(doc(db, 'packages', pkg.id), pkg));
+                               await batch.commit();
+                               await showAlert(`Đã cứu hộ và Đẩy Thành Công ${missingPackages.length} kiện lên hệ thống đám mây! Giờ các máy khác đã có thể nhìn thấy.`);
+                           } catch (e: any) {
+                               await showAlert("Lỗi đồng bộ: " + e.message);
+                           }
+                       }}
+                       className="px-4 py-2.5 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-xl font-bold border border-amber-200 transition-colors flex items-center gap-2 shadow-sm"
+                       title="Ấn nút này nếu tạo kiện rồi mà trình duyệt khác không thấy"
+                   >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        Ép Đồng Bộ Lên Mây
+                   </button>
                    <button 
                       onClick={() => setIsCreating(true)}
                       className="px-6 py-2.5 bg-[#4F46E5] hover:bg-[#4338CA] text-white rounded-xl font-bold shadow-md shadow-indigo-500/30 transition-transform active:scale-95 flex items-center gap-2 border border-indigo-400"
