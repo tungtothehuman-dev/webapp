@@ -881,11 +881,11 @@ export default function OrdersPage() {
                       <td className="px-3 py-2 text-emerald-600 font-bold tracking-wider text-sm text-center">
                         {order.TrackingNumber ? (
                              <a 
-                                 href={`https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=${order.TrackingNumber}%2C`}
+                                 href={order.TrackingNumber.toUpperCase().startsWith('1Z') ? `https://www.ups.com/track?tracknum=${order.TrackingNumber}&loc=vi_VN&requester=QUIC/trackdetails` : `https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=${order.TrackingNumber}%2C`}
                                  target="_blank"
                                  rel="noopener noreferrer"
                                  className="hover:underline hover:text-emerald-800 transition"
-                                 title="Bấm để tra cứu trên trang chủ USPS"
+                                 title={order.TrackingNumber.toUpperCase().startsWith('1Z') ? "Bấm để tra cứu trên trang chủ UPS" : "Bấm để tra cứu trên trang chủ USPS"}
                              >
                                  {order.TrackingNumber}
                              </a>
@@ -1033,12 +1033,18 @@ export default function OrdersPage() {
                 <span className="text-sm font-medium text-slate-500">Hiển thị:</span>
                 <select
                   value={itemsPerPage}
-                  onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                  onChange={(e) => { 
+                      setItemsPerPage(Number(e.target.value)); 
+                      setCurrentPage(1); 
+                      setSelectedIndexes(new Set()); // Thêm dòng này để reset các mục đã chọn khi chuyển số lượng
+                  }}
                   className="bg-white border text-slate-700 font-bold border-slate-300 rounded overflow-hidden px-2 py-1.5 text-sm outline-none cursor-pointer focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
                 >
                   <option value={30}>30 dòng / trang</option>
                   <option value={50}>50 dòng / trang</option>
                   <option value={100}>100 dòng / trang</option>
+                  <option value={150}>150 dòng / trang</option>
+                  <option value={200}>200 dòng / trang</option>
                 </select>
               </div>
 
