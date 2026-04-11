@@ -214,14 +214,47 @@ export default function PackagesPage() {
                                                 {orderCount}
                                             </span>
                                         </td>
-                                        <td className="px-5 py-3 whitespace-nowrap">
-                                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider whitespace-nowrap border ${
-                                                pkg.status === 'Delivered' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
-                                                pkg.status.includes('Đã xuất kho') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                                                'bg-amber-50 text-amber-700 border-amber-200'
-                                            }`}>
-                                                {pkg.status === 'Delivered' ? 'DELIVERED' : pkg.status.includes('Đã xuất kho') ? 'ĐÃ XUẤT KHO' : pkg.status}
-                                            </span>
+                                        <td className="px-5 py-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                                            {pkg.status === 'Delivered' ? (
+                                                <button 
+                                                    onClick={async () => {
+                                                        if(await showConfirm("Bạn muốn hoàn tác trạng thái kiện hàng này về Đã Xuất Kho Việt Nam?")) {
+                                                            updatePackage(pkg.id, { status: 'Đã xuất kho Việt Nam' });
+                                                            import('@/firebase').then(({ db }) => {
+                                                                import('firebase/firestore').then(({ doc, updateDoc }) => {
+                                                                   updateDoc(doc(db, 'packages', pkg.id), { status: 'Đã xuất kho Việt Nam' }).catch(err => console.error(err));
+                                                                });
+                                                            });
+                                                        }
+                                                    }}
+                                                    title="Bấm để hoàn tác về Đã Xuất Kho"
+                                                    className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider whitespace-nowrap border bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:shadow-sm transition cursor-pointer"
+                                                >
+                                                    DELIVERED
+                                                </button>
+                                            ) : pkg.status.includes('Đã xuất kho') ? (
+                                                <button 
+                                                    onClick={async () => {
+                                                        if(await showConfirm("Xác nhận Kho Mỹ đã nhận được kiện hàng này? (Đổi trạng thái thành Delivered)")) {
+                                                            updatePackage(pkg.id, { status: 'Delivered' });
+                                                            import('@/firebase').then(({ db }) => {
+                                                                import('firebase/firestore').then(({ doc, updateDoc }) => {
+                                                                   updateDoc(doc(db, 'packages', pkg.id), { status: 'Delivered' }).catch(err => console.error(err));
+                                                                });
+                                                            });
+                                                            await showAlert("Đã cập nhật KIỆN HÀNG thành Delivered!");
+                                                        }
+                                                    }}
+                                                    title="Bấm để báo Kho Mỹ Đã Nhận (Delivered)"
+                                                    className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider whitespace-nowrap border bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:shadow-sm transition cursor-pointer"
+                                                >
+                                                    ĐÃ XUẤT KHO
+                                                </button>
+                                            ) : (
+                                                <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider whitespace-nowrap border bg-amber-50 text-amber-700 border-amber-200">
+                                                    {pkg.status}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-5 py-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
                                             {editingTrackId === pkg.id ? (
