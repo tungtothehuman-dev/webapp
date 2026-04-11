@@ -90,6 +90,16 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                  if (missingPackages.length > 0) {
                      // Nhét tạm vào list hiển thị để không bị biến mất trên màn hình
                      docs = [...docs, ...missingPackages];
+                     
+                     // TỰ ĐỘNG ĐẨY LÊN MÂY (Auto Sync)
+                     try {
+                         const batch = writeBatch(db);
+                         missingPackages.forEach(pkg => batch.set(doc(db, 'packages', pkg.id), pkg));
+                         batch.commit().catch(e => console.error("Auto Sync Error:", e));
+                         console.log(`Đã TỰ ĐỘNG đẩy ${missingPackages.length} kiện mắc kẹt lên Firebase!`);
+                     } catch (err) {
+                         console.error("Lỗi tự động đồng bộ:", err);
+                     }
                  }
              }
              

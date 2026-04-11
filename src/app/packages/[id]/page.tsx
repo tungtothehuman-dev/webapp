@@ -165,7 +165,7 @@ export default function PackageDetailPage() {
         setScanInput("");
     };
 
-    const isClosed = activePkg.status === 'Đã xuất kho Việt Nam';
+    const isClosed = activePkg.status === 'Đã xuất kho Việt Nam' || activePkg.status === 'Delivered';
 
     const togglePackageStatus = async () => {
         if (isClosed) {
@@ -181,6 +181,13 @@ export default function PackageDetailPage() {
                 setPackage(activePkg, { status: 'Đã xuất kho Việt Nam', closedAt: timeString });
                 await showAlert("Đã chốt kiện hàng thành công!");
             }
+        }
+    };
+
+    const markAsDelivered = async () => {
+        if(await showConfirm("Xác nhận Kho Mỹ đã nhận được kiện hàng này? (Trạng thái sẽ đổi thành Delivered)")) {
+            setPackage(activePkg, { status: 'Delivered' });
+            await showAlert("Đã cập nhật kiện thành Delivered!");
         }
     };
 
@@ -353,8 +360,12 @@ export default function PackageDetailPage() {
                 <div className="flex flex-col gap-1.5 justify-center">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Trạng thái kiện</p>
                     <div>
-                        <span className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border ${activePkg.status.includes('Đã xuất kho') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-indigo-50 text-indigo-700 border-indigo-200'}`}>
-                            {activePkg.status}
+                        <span className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border ${
+                            activePkg.status === 'Delivered' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                            activePkg.status.includes('Đã xuất kho') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                            'bg-indigo-50 text-indigo-700 border-indigo-200'
+                        }`}>
+                            {activePkg.status === 'Delivered' ? 'DELIVERED (ĐÃ NHẬN)' : activePkg.status}
                         </span>
                     </div>
                 </div>
@@ -446,6 +457,11 @@ export default function PackageDetailPage() {
                     <button onClick={togglePackageStatus} className={`px-5 py-2.5 font-bold rounded-md transition text-sm ${isClosed ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-[#009688] hover:bg-[#00796b] text-white'}`}>
                         {isClosed ? "Mở lại kiện" : "Đóng kiện hàng"}
                     </button>
+                    {activePkg.status === 'Đã xuất kho Việt Nam' && (
+                        <button onClick={markAsDelivered} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-md transition text-sm shadow-md shadow-blue-500/20">
+                            Kho Mỹ Đã Nhận (Delivered)
+                        </button>
+                    )}
                     {currentUser?.role !== 'support' && (
                         <button 
                             onClick={handleDeletePackage} 
@@ -505,7 +521,7 @@ export default function PackageDetailPage() {
                                     const orderData = orders.find(o => o.Description === code);
                                     const receiver = orderData?.['Receiver Name'] || "—";
                                     const tracking = orderData?.TrackingNumber || "—";
-                                    const canRemove = activePkg.status !== 'Đã xuất kho Việt Nam';
+                                    const canRemove = !isClosed;
 
                                     let isSuccess = false;
                                     let warningText = "";
