@@ -293,9 +293,20 @@ export default function PackagesPage() {
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-2 max-w-[240px] group/track">
-                                                    <span className={`text-[13px] font-mono font-bold truncate ${pkg.masterTracking ? 'text-slate-800' : 'text-slate-400 italic font-normal'}`}>
-                                                        {pkg.masterTracking || "Nhập mã track..."}
-                                                    </span>
+                                                    {pkg.masterTracking ? (
+                                                        <a 
+                                                            href={pkg.masterTracking.toUpperCase().startsWith('1Z') ? `https://www.ups.com/track?tracknum=${pkg.masterTracking}&loc=vi_VN&requester=QUIC/trackdetails` : `https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=${pkg.masterTracking}%2C`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-[13px] font-mono font-bold truncate text-slate-800 hover:text-blue-600 hover:underline transition-colors block"
+                                                            title={pkg.masterTracking.toUpperCase().startsWith('1Z') ? "Bấm để tra cứu UPS" : "Bấm để tra cứu USPS"}
+                                                            onClick={e => e.stopPropagation()}
+                                                        >
+                                                            {pkg.masterTracking}
+                                                        </a>
+                                                    ) : (
+                                                        <span className="text-[13px] font-mono font-bold truncate text-slate-400 italic font-normal">Nhập mã track...</span>
+                                                    )}
                                                     <button 
                                                         onClick={() => setEditingTrackId(pkg.id)} 
                                                         className="p-1.5 text-slate-400 hover:text-indigo-600 opacity-0 group-hover/track:opacity-100 transition-all rounded-md hover:bg-indigo-50 shrink-0"
