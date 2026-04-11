@@ -879,7 +879,19 @@ export default function OrdersPage() {
                         {order["Receiver Name"] || <span className="text-slate-400">-</span>}
                       </td>
                       <td className="px-3 py-2 text-emerald-600 font-bold tracking-wider text-sm text-center">
-                        {order.TrackingNumber || <span className="text-red-400 italic text-xs font-normal">Chưa nạp PDF</span>}
+                        {order.TrackingNumber ? (
+                             <a 
+                                 href={`https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=${order.TrackingNumber}%2C`}
+                                 target="_blank"
+                                 rel="noopener noreferrer"
+                                 className="hover:underline hover:text-emerald-800 transition"
+                                 title="Bấm để tra cứu trên trang chủ USPS"
+                             >
+                                 {order.TrackingNumber}
+                             </a>
+                        ) : (
+                            <span className="text-red-400 italic text-xs font-normal">Chưa nạp PDF</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-center">
                         {(() => {
