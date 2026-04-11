@@ -20,6 +20,7 @@ export default function PackagesPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [filterDest, setFilterDest] = useState("All");
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   
   // Data for Create Modal
@@ -28,7 +29,6 @@ export default function PackagesPage() {
 
 
 
-  // Handle Create Package
   const handleCreatePackage = async () => {
       const now = new Date();
       const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} ${now.getDate().toString().padStart(2, '0')}/${(now.getMonth()+1).toString().padStart(2, '0')}/${now.getFullYear()}`;
@@ -77,6 +77,54 @@ export default function PackagesPage() {
       router.push(`/packages/${newId}`);
   };
 
+  const handleSyncTracking = async () => {
+        setIsSyncing(true);
+        const pendingPkgs = packages.filter(p => p.status.includes('Đã xuất kho') && p.masterTracking && p.masterTracking.length > 5);
+        
+        if (pendingPkgs.length === 0) {
+            await showAlert("Không có kiện hàng nào đang gửi đi chứa mã Track hợp lệ để kiểm tra!");
+            setIsSyncing(false);
+            return;
+        }
+
+        let updatedCount = 0;
+        let pendingConfigCount = 0;
+
+        for (const pkg of pendingPkgs) {
+             try {
+                  const res = await fetch('/api/track', {
+                      method: 'POST',
+                      headers: {'Content-Type': 'application/json'},
+                      body: JSON.stringify({ trackingNumber: pkg.masterTracking, carrier: 'UPS' })
+                  });
+                  const data = await res.json();
+                  
+                  if (data.pendingConfig) {
+                      pendingConfigCount++;
+                      break; // Ngưng luôn vì chưa trỏ file ENV
+                  }
+
+                  if (data.isDelivered) {
+                       updatePackage(pkg.id, { status: 'Delivered' });
+                       const { doc: fDoc, updateDoc } = await import('firebase/firestore');
+                       updateDoc(fDoc(db, 'packages', pkg.id), { status: 'Delivered' }).catch(err => console.error("Lỗi đẩy Delivered UPS lên mây", err));
+                       updatedCount++;
+                  }
+             } catch (e) {
+                 console.error("Lỗi gọi API track UPS kiện", pkg.id, e);
+             }
+        }
+
+        setIsSyncing(false);
+
+        if (pendingConfigCount > 0) {
+            await showAlert("LỖI CẤU HÌNH API UPS:\n\nTrường hợp này anh/chị cần lấy Client ID & Secret trên trang UPS Developer,\nsau đó mở thư mục gốc của code, sửa file '.env.local'.\nCuối cùng TẮT TERMINAL và CHẠY LẠI lệnh 'npm run dev' để cập nhật thay đổi nhé.");
+        } else if (updatedCount > 0) {
+            await showAlert(`Hoàn tất đồng bộ Tracking API!\n\nĐã nhận diện thành công ${updatedCount} kiện hàng được GIAO TỚI KHO. Hệ thống đã tự động bôi xanh kiện hàng.`);
+        } else {
+            await showAlert(`Hoàn tất đồng bộ Tracking API!\n\nĐã kiểm tra nhưng hiện tại kiện hàng của anh vẫn đang trên đường chuyển đi (In Transit), chưa kiện nào được giao tới nhận.`);
+        }
+  };
 
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -143,6 +191,19 @@ export default function PackagesPage() {
                 </div>
                 
                 <div className="flex items-center gap-3 shrink-0">
+
+                   <button 
+                      onClick={handleSyncTracking}
+                      disabled={isSyncing}
+                      className="px-5 py-2.5 bg-sky-50 text-sky-600 hover:bg-sky-100 disabled:opacity-50 disabled:cursor-wait rounded-xl font-bold shadow-sm transition-transform active:scale-95 flex items-center gap-2 border border-sky-200"
+                   >
+                       {isSyncing ? (
+                          <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                       ) : (
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                       )}
+                       Đồng Bộ API Trạng Thái
+                   </button>
 
                    <button 
                       onClick={() => setIsCreating(true)}
