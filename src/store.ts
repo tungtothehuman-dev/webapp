@@ -65,7 +65,9 @@ interface PackageStore {
   updatePackage: (id: string, updates: Partial<PackageRow>) => void;
 }
 
-export const usePackageStore = create<PackageStore>((set) => ({
+export const usePackageStore = create<PackageStore>()(
+  persist(
+    (set) => ({
       packages: [],
       setPackages: (pkgs) => set({ packages: pkgs }),
       addPackage: (pkg) => set((state) => ({ packages: [pkg, ...state.packages] })),
@@ -74,7 +76,12 @@ export const usePackageStore = create<PackageStore>((set) => ({
       updatePackage: (id, updates) => set((state) => ({
         packages: state.packages.map(p => p.id === id ? { ...p, ...updates } : p)
       }))
-    }));
+    }),
+    {
+      name: 'package-storage',
+    }
+  )
+);
 
 export interface WarehouseItem {
   id: string;
