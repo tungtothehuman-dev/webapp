@@ -247,6 +247,10 @@ export default function OrdersPage() {
     if (filter) {
       setStatusFilter(filter);
     }
+    const searchTerm = params.get('search');
+    if (searchTerm) {
+        setSearchQuery(searchTerm);
+    }
   }, []);
 
   const handleStatusChange = (id: string, order: OrderRow, newStatus: string) => {

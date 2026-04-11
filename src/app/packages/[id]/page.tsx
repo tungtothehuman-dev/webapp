@@ -168,6 +168,11 @@ export default function PackageDetailPage() {
     const isClosed = activePkg.status === 'Đã xuất kho Việt Nam' || activePkg.status === 'Delivered';
 
     const togglePackageStatus = async () => {
+        if (activePkg.status === 'Delivered') {
+            await showAlert("Kiện hàng này đã DELIVERED tại Kho Mỹ, KHÔNG THỂ mở lại được!");
+            return;
+        }
+
         if (isClosed) {
             if(await showConfirm("Bạn có chắc muốn Mở lại kiện hàng này để tiếp tục quét đơn không?")) {
                 // Mở lại thì dùng trạng thái Đang xử lý hoặc Đóng kiện, và xóa ngày đóng
@@ -454,7 +459,16 @@ export default function PackageDetailPage() {
                             {isScanning ? "Dừng quét" : "Bắt đầu quét"}
                         </button>
                     )}
-                    <button onClick={togglePackageStatus} className={`px-5 py-2.5 font-bold rounded-md transition text-sm ${isClosed ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-[#009688] hover:bg-[#00796b] text-white'}`}>
+                    <button 
+                        onClick={togglePackageStatus} 
+                        disabled={activePkg.status === 'Delivered'}
+                        title={activePkg.status === 'Delivered' ? "Đã hạ cánh tại Mỹ, khóa chức năng mở lại kiện" : ""}
+                        className={`px-5 py-2.5 font-bold rounded-md transition text-sm ${
+                            activePkg.status === 'Delivered' ? 'bg-slate-200 text-slate-500 cursor-not-allowed opacity-70' :
+                            isClosed ? 'bg-amber-600 hover:bg-amber-500 text-white' : 
+                            'bg-[#009688] hover:bg-[#00796b] text-white'
+                        }`}
+                    >
                         {isClosed ? "Mở lại kiện" : "Đóng kiện hàng"}
                     </button>
                     {activePkg.status === 'Đã xuất kho Việt Nam' && (
@@ -555,7 +569,12 @@ export default function PackageDetailPage() {
 
                                     return (
                                         <tr key={code} className={`hover:bg-gray-50/50 transition ${!isSuccess ? 'bg-red-50/30' : ''}`}>
-                                            <td className="px-6 py-4 font-mono text-[#009688] font-bold">{code}</td>
+                                            <td className="px-6 py-4 font-mono font-bold">
+                                                <a href={`/orders?search=${encodeURIComponent(code)}`} target="_blank" className="text-[#009688] hover:text-[#00796b] hover:underline flex items-center gap-1.5 group relative w-fit transition-all">
+                                                    {code}
+                                                    <svg className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-[#009688]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                                </a>
+                                            </td>
                                             <td className="px-6 py-4 text-gray-800 font-medium">{receiver}</td>
                                             <td className="px-6 py-4 text-blue-600 font-mono font-medium">{tracking !== "—" ? tracking : "Chưa có"}</td>
                                             <td className="px-6 py-4">
