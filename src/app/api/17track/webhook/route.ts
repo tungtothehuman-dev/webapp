@@ -43,15 +43,33 @@ export async function POST(req: Request) {
         
         if (allEventsString.includes('import charges are due') || 
             allEventsString.includes('duties or taxes are due') ||
+            allEventsString.includes('duties and taxes are due') ||
             allEventsString.includes('customs duty payable') ||
             allEventsString.includes('phí nhập khẩu') ||
-            allEventsString.includes('chịu thuế')) {
+            allEventsString.includes('phải nộp thuế') ||
+            allEventsString.includes('chịu thuế') || 
+            allEventsString.includes('must pay the duties or taxes') ||
+            allEventsString.includes('thanh toán các khoản phí và thuế') ||
+            allEventsString.includes('thuế đối với gói hàng')) {
             taxStatus = 'Cần Đóng Thuế ⚠️';
         }
 
         if (allEventsString.includes('import c.o.d. (icod) charges have been paid') || 
             allEventsString.includes('payment for customs') ||
-            allEventsString.includes('đã được thanh toán')) {
+            allEventsString.includes('đã được thanh toán') ||
+            allEventsString.includes('đã thanh toán thuế') ||
+            allEventsString.includes('đã nộp thuế') ||
+            allEventsString.includes('duties and taxes have been paid') ||
+            allEventsString.includes('duty and tax have been paid') ||
+            allEventsString.includes('taxes have been paid') ||
+            allEventsString.includes('charges have been paid') ||
+            allEventsString.includes('receiver paid the import charges') ||
+            allEventsString.includes('paid the import charges') ||
+            allEventsString.includes('cleared customs') ||
+            allEventsString.includes('customs cleared') ||
+            allEventsString.includes('thông quan') ||
+            allEventsString.includes('released by the clearing agency') ||
+            allEventsString.includes('released by the customs agency')) {
             taxStatus = 'Đã Thanh Toán Thuế';
         }
 
