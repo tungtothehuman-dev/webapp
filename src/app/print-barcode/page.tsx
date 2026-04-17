@@ -28,7 +28,7 @@ export default function PrintBarcodePage() {
 
             for (const code of codes) {
                 // Find receiver name and HUB from orders
-                const matchedOrder = orders.find(o => o.Description === code);
+                const matchedOrder = orders.find(o => String(o.Description) === String(code));
                 const receiverName = matchedOrder?.["Receiver Name"] || "";
                 const hubDisplay = (matchedOrder?.HUB || matchedOrder?.Hub || "").toString().replace(/^HUB\s*/i, '').trim().toUpperCase();
 

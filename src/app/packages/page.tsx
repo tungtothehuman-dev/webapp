@@ -246,7 +246,7 @@ export default function PackagesPage() {
                         <tbody className="bg-white">
                             {paginatedPackages.map((pkg) => {
                                 const orderCount = pkg.orderDescriptions.filter((code: string) => {
-                                    const orderData = orders.find(x => x.Description === code);
+                                    const orderData = orders.find(x => String(x.Description) === String(code));
                                     if (!orderData) return false;
                                     const pkgContainingOrder = packages.find(p => p.id !== pkg.id && p.orderDescriptions.includes(code));
                                     return !pkgContainingOrder && (orderData.Status === 'Đóng kiện' || orderData.Status === 'Kho Mỹ đã scan');

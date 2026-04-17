@@ -72,7 +72,7 @@ export default function PrintPage() {
         
         // Cần xoá dấu tiếng việt ở cả Mã Đơn (ví dụ: PĐM) và Query (PDM) để có thể khớp nhau 100%
         // Đồng thời loại bỏ khoảng chấm phẩy, khoảng trắng
-        const normalizeStr = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").replace(/[\s\-_,\.]/g, '').toLowerCase();
+        const normalizeStr = (str: any) => String(str || '').normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").replace(/[\s\-_,\.]/g, '').toLowerCase();
         
         const qNorm = normalizeStr(query);
         const cleanNorm = normalizeStr(cleanQuery);
