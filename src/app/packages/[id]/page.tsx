@@ -204,7 +204,7 @@ export default function PackageDetailPage() {
         setPackage(activePkg, { orderDescriptions: updatedOrderDescriptions });
 
         // Khôi phục trạng thái đơn hàng (chỉ khi nó đang là 'Đóng kiện')
-        const orderMatchIdx = orders.findIndex(o => o.Description === code);
+        const orderMatchIdx = orders.findIndex(o => String(o.Description) === String(code));
         if (orderMatchIdx !== -1) {
             const orderMatch = orders[orderMatchIdx];
             
@@ -256,7 +256,7 @@ export default function PackageDetailPage() {
 
     const exportExcel = async () => {
         const validCodes = activePkg.orderDescriptions.filter((code: string) => {
-            const o = orders.find(x => x.Description === code);
+            const o = orders.find(x => String(x.Description) === String(code));
             return o && (o.Status === 'Đóng kiện' || o.Status === 'Kho Mỹ đã scan');
         });
 
@@ -273,7 +273,7 @@ export default function PackageDetailPage() {
         ];
 
         const cleanData = validCodes.map((code: string) => {
-            const order = orders.find(o => o.Description === code);
+            const order = orders.find(o => String(o.Description) === String(code));
             if (!order) return {};
             const { pdfBase64, ActionHistory, originalIndex, Status, ...rest } = order;
             
@@ -395,7 +395,7 @@ export default function PackageDetailPage() {
                     <div className="flex items-baseline gap-1">
                         <span className="font-black text-2xl text-slate-800 tracking-tight leading-none">
                             {activePkg.orderDescriptions.filter((code: string) => {
-                                const orderData = orders.find(x => x.Description === code);
+                                const orderData = orders.find(x => String(x.Description) === String(code));
                                 if (!orderData) return false;
                                 const pkgContainingOrder = packages.find(p => p.id !== activePkg.id && p.orderDescriptions.includes(code));
                                 return !pkgContainingOrder && (orderData.Status === 'Đóng kiện' || orderData.Status === 'Kho Mỹ đã scan');
@@ -493,7 +493,7 @@ export default function PackageDetailPage() {
                 {(() => {
                     const displayedCodes = activePkg.orderDescriptions.filter((code: string) => {
                         if (!showErrorsOnly) return true;
-                        const orderData = orders.find(o => o.Description === code);
+                        const orderData = orders.find(o => String(o.Description) === String(code));
                         if (!orderData) return true;
                         const pkgContainingOrder = packages.find(p => p.id !== activePkg.id && p.orderDescriptions.includes(code));
                         if (pkgContainingOrder) return true;
@@ -532,7 +532,7 @@ export default function PackageDetailPage() {
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {paginatedCodes.map((code: string) => {
-                                    const orderData = orders.find(o => o.Description === code);
+                                    const orderData = orders.find(o => String(o.Description) === String(code));
                                     const receiver = orderData?.['Receiver Name'] || "—";
                                     const tracking = orderData?.TrackingNumber || "—";
                                     const canRemove = !isClosed;
