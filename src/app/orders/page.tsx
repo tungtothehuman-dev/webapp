@@ -294,7 +294,7 @@ export default function OrdersPage() {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const safeBarcodeData = description.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, 'd').replace(/Đ/g, 'D');
+      const safeBarcodeData = String(description).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, 'd').replace(/Đ/g, 'D');
 
       const tempCanvas = document.createElement("canvas");
       JsBarcode(tempCanvas, safeBarcodeData, {
@@ -377,7 +377,7 @@ export default function OrdersPage() {
       const [y, m, d] = dateFilter.split("-");
       const dmy = `${d}/${m}/${y}`;
       const dmyShort = `${parseInt(d, 10)}/${parseInt(m, 10)}/${y}`;
-      if (!item.UploadDate.includes(dateFilter) && !item.UploadDate.includes(dmy) && !item.UploadDate.includes(dmyShort)) {
+      if (!String(item.UploadDate).includes(dateFilter) && !String(item.UploadDate).includes(dmy) && !String(item.UploadDate).includes(dmyShort)) {
         return false;
       }
     }
@@ -406,7 +406,7 @@ export default function OrdersPage() {
     const cleanQ = decodeTelex(searchQuery).toLowerCase();
     
     // Xoá dấu tiếng việt để so sánh tương đối chống rớt đơn
-    const removeAccents = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+    const removeAccents = (str: string) => String(str || '').normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
     const qNoAccent = removeAccents(q);
     const cleanNoAccent = removeAccents(cleanQ);
 
@@ -663,8 +663,8 @@ export default function OrdersPage() {
        // Chỉ check những đơn có Tracking, trạng thái nằm ở Kho Mỹ hoặc đang chuẩn bị phát
        const pendingUSPS = orders.filter(o => 
            o.TrackingNumber && 
-           o.TrackingNumber.length > 10 &&
-           !o.TrackingNumber.toUpperCase().startsWith('1Z') && // Bỏ qua UPS
+           String(o.TrackingNumber).length > 10 &&
+           !String(o.TrackingNumber).toUpperCase().startsWith('1Z') && // Bỏ qua UPS
            (o.Status === 'Kho Mỹ đã scan' || o.Status === 'Chờ xử lý')
        );
 
@@ -950,11 +950,11 @@ export default function OrdersPage() {
                       <td className="px-3 py-2 text-emerald-600 font-bold tracking-wider text-sm text-center">
                         {order.TrackingNumber ? (
                              <a 
-                                 href={order.TrackingNumber.toUpperCase().startsWith('1Z') ? `https://www.ups.com/track?tracknum=${order.TrackingNumber}&loc=vi_VN&requester=QUIC/trackdetails` : `https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=${order.TrackingNumber}%2C`}
+                                 href={String(order.TrackingNumber).toUpperCase().startsWith('1Z') ? `https://www.ups.com/track?tracknum=${order.TrackingNumber}&loc=vi_VN&requester=QUIC/trackdetails` : `https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=${order.TrackingNumber}%2C`}
                                  target="_blank"
                                  rel="noopener noreferrer"
                                  className="hover:underline hover:text-emerald-800 transition"
-                                 title={order.TrackingNumber.toUpperCase().startsWith('1Z') ? "Bấm để tra cứu trên trang chủ UPS" : "Bấm để tra cứu trên trang chủ USPS"}
+                                 title={String(order.TrackingNumber).toUpperCase().startsWith('1Z') ? "Bấm để tra cứu trên trang chủ UPS" : "Bấm để tra cứu trên trang chủ USPS"}
                              >
                                  {order.TrackingNumber}
                              </a>
