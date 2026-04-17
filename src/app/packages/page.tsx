@@ -299,10 +299,18 @@ export default function PackagesPage() {
                                                             const newVal = e.target.value.trim();
                                                             setEditingTrackId(null);
                                                             if (newVal !== (pkg.masterTracking || '')) {
-                                                                updatePackage(pkg.id, { masterTracking: newVal });
+                                                                const updates: any = { masterTracking: newVal };
+                                                                
+                                                                // Auto promote to In Transit if tracking is valid and package is not yet delivered
+                                                                if (newVal.length > 5 && ['Khởi tạo', 'Đã xuất kho Việt Nam', 'Đã xuất kho'].includes(pkg.status)) {
+                                                                    updates.status = 'In Transit';
+                                                                    updates.lastTrackingEvent = 'Hệ thống đang chờ đồng bộ dữ liệu lịch trình...';
+                                                                }
+
+                                                                updatePackage(pkg.id, updates);
                                                                 import('@/firebase').then(({ db }) => {
                                                                     import('firebase/firestore').then(({ doc, updateDoc }) => {
-                                                                       updateDoc(doc(db, 'packages', pkg.id), { masterTracking: newVal }).catch(err => {
+                                                                       updateDoc(doc(db, 'packages', pkg.id), updates).catch(err => {
                                                                             console.error("Lỗi đồng bộ mã kiện:", err);
                                                                        });
                                                                     });
