@@ -72,6 +72,31 @@ export default function PackageDetailPage() {
     if (!mounted) return null;
 
     const activePkg = packages.find(p => p.id === id);
+    const isClosed = activePkg?.status === 'Đã xuất kho Việt Nam' || activePkg?.status === 'Delivered';
+
+    // Auto-capture máy quét vạch / gõ phím mà không cần click box (Chỉ hoạt động khi ĐÃ BẤM Quét)
+    useEffect(() => {
+        const handleGlobalKeyDown = (e: KeyboardEvent) => {
+            if (isClosed || !isScanning) return;
+            
+            // Bỏ qua nếu đang cố tình bấm vào các ô input khác (ví dụ: nhập Track Tổng)
+            const target = e.target as HTMLElement;
+            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+                return;
+            }
+
+            // Bắt ký tự thường (barcode scanner gõ chữ cực nhanh)
+            if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                // Ép focus về ô nhập mã
+                if (scanInputRef.current) {
+                    scanInputRef.current.focus();
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleGlobalKeyDown);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    }, [isClosed, isScanning]);
 
     if (!activePkg) {
         return (
@@ -251,32 +276,6 @@ export default function PackageDetailPage() {
 
         setScanInput("");
     };
-
-    const isClosed = activePkg.status === 'Đã xuất kho Việt Nam' || activePkg.status === 'Delivered';
-
-    // Auto-capture máy quét vạch / gõ phím mà không cần click box (Chỉ hoạt động khi ĐÃ BẤM Quét)
-    useEffect(() => {
-        const handleGlobalKeyDown = (e: KeyboardEvent) => {
-            if (isClosed || !isScanning) return;
-            
-            // Bỏ qua nếu đang cố tình bấm vào các ô input khác (ví dụ: nhập Track Tổng)
-            const target = e.target as HTMLElement;
-            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-                return;
-            }
-
-            // Bắt ký tự thường (barcode scanner gõ chữ cực nhanh)
-            if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-                // Ép focus về ô nhập mã
-                if (scanInputRef.current) {
-                    scanInputRef.current.focus();
-                }
-            }
-        };
-
-        window.addEventListener('keydown', handleGlobalKeyDown);
-        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-    }, [isClosed, isScanning]);
 
     const togglePackageStatus = async () => {
         if (activePkg.status === 'Delivered') {
