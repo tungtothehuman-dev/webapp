@@ -33,7 +33,7 @@ export default function OrdersPage() {
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkDeleteText, setBulkDeleteText] = useState("");
-  const [isSyncing, setIsSyncing] = useState(false);
+
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTargetId, setUploadTargetId] = useState<string | null>(null);
@@ -657,59 +657,6 @@ export default function OrdersPage() {
       }
   };
 
-  const handleSyncUSPS = async () => {
-       setIsSyncing(true);
-       
-       // Chỉ check những đơn có Tracking, trạng thái nằm ở Kho Mỹ hoặc đang chuẩn bị phát
-       const pendingUSPS = orders.filter(o => 
-           o.TrackingNumber && 
-           String(o.TrackingNumber).length > 10 &&
-           !String(o.TrackingNumber).toUpperCase().startsWith('1Z') && // Bỏ qua UPS
-           (o.Status === 'Kho Mỹ đã scan' || o.Status === 'Chờ xử lý')
-       );
-
-       if (pendingUSPS.length === 0) {
-           await showAlert("Không tìm thấy đơn hàng USPS hợp lệ nào cần kiểm tra lộ trình.");
-           setIsSyncing(false);
-           return;
-       }
-
-       let updatedCount = 0;
-       let pendingConfigCount = 0;
-
-       for (const order of pendingUSPS) {
-           try {
-               const res = await fetch('/api/track', {
-                   method: 'POST',
-                   headers: {'Content-Type': 'application/json'},
-                   body: JSON.stringify({ trackingNumber: order.TrackingNumber, carrier: 'USPS' })
-               });
-               const data = await res.json();
-               
-               if (data.pendingConfig) {
-                   pendingConfigCount++;
-                   break;
-               }
-
-               if (data.isDelivered) {
-                   handleStatusChange(order.id, order, "Delivered to Customer");
-                   updatedCount++;
-               }
-           } catch (e) {
-               console.error("Lỗi đồng bộ USPS đơn", order.id, e);
-           }
-       }
-
-       setIsSyncing(false);
-
-       if (pendingConfigCount > 0) {
-           await showAlert("LỖI CẤU HÌNH API USPS:\n\nTrường hợp này anh/chị cần lấy USPS Web Tool ID, sau đó cấu hình vào file '.env.local' và chạy lại lệnh 'npm run dev' nhé.");
-       } else if (updatedCount > 0) {
-           await showAlert(`Đồng bộ thành công! Đã tự động cập nhật ${updatedCount} đơn hàng sang trạng thái 'Delivered to Customer'.`);
-       } else {
-           await showAlert(`Đồng bộ hoàn tất! Hiện tại các mã đơn vẫn đang trên đường giao (In Transit), chưa có đơn nào phát thành công.`);
-       }
-  };
 
   return (
     <div>
@@ -730,20 +677,6 @@ export default function OrdersPage() {
                 Xuất Excel ({selectedIndexes.size})
               </button>
               
-              <button 
-                  onClick={handleSyncUSPS}
-                  disabled={isSyncing}
-                  className="px-4 py-2 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded-lg text-sm font-bold transition-all shadow-sm flex items-center gap-2 border border-sky-200 disabled:opacity-50"
-                  title="Tự động kiểm tra trạng thái đơn nội địa qua USPS API"
-              >
-                  {isSyncing ? (
-                      <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                  ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                  )}
-                  {isSyncing ? "Đang quét..." : "Đồng bộ lộ trình"}
-              </button>
-
               {currentUser?.role === 'admin' && (
                   <button 
                       onClick={() => selectedIndexes.size > 0 ? handleDeleteSelected() : setShowBulkDeleteModal(true)} 
