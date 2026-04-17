@@ -22,6 +22,7 @@ export default function PackageDetailPage() {
     const [scanInput, setScanInput] = useState("");
     const scanInputRef = useRef<HTMLInputElement>(null);
     const [showErrorsOnly, setShowErrorsOnly] = useState(false);
+    const [soundEnabled, setSoundEnabled] = useState(true);
     const [isScanning, setIsScanning] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
 
@@ -48,7 +49,23 @@ export default function PackageDetailPage() {
         );
     }
 
-    const playSound = (type: 'success' | 'error') => {
+    const sayStatus = (text: string) => {
+        if (!soundEnabled) return;
+        try {
+            if ('speechSynthesis' in window) {
+                const msg = new SpeechSynthesisUtterance(text);
+                msg.lang = 'vi-VN';
+                msg.rate = 1.3; 
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(msg);
+            }
+        } catch (e) {
+            console.error("Lỗi đọc số:", e);
+        }
+    };
+
+    const playSuccessSound = () => {
+        if (!soundEnabled) return;
         try {
             const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
             if (!AudioContext) return;
@@ -68,12 +85,8 @@ export default function PackageDetailPage() {
             };
 
             const now = audioCtx.currentTime;
-            if (type === 'success') {
-                playNote(1000, 'sine', now, 0.1, 0.15); // Ting
-                playNote(2000, 'sine', now + 0.1, 0.15, 0.15); // Ting 2
-            } else {
-                playNote(150, 'sawtooth', now, 0.4, 0.2); // Buuzzzz
-            }
+            playNote(1000, 'sine', now, 0.1, 0.15); // Ting
+            playNote(2000, 'sine', now + 0.1, 0.15, 0.15); // Ting 2
         } catch (e) {
             console.error(e);
         }
@@ -83,7 +96,7 @@ export default function PackageDetailPage() {
         e.preventDefault();
         
         if (activePkg.status === 'Đã xuất kho Việt Nam') {
-            playSound('error');
+            sayStatus('Thất bại');
             await showAlert("Kiện hàng đã xuất kho! Không thể thêm mã mới.");
             return;
         }
@@ -135,7 +148,7 @@ export default function PackageDetailPage() {
         const code = (orderMatchIdx !== -1 && orders[orderMatchIdx].Description) ? String(orders[orderMatchIdx].Description) : String(rawCode);
 
         if (activePkg.orderDescriptions.includes(code)) {
-            playSound('error');
+            sayStatus('Thất bại');
             await showAlert(`Mã ${code} đã nằm trong kiện quản lý!`);
             setScanInput("");
             return;
@@ -199,9 +212,24 @@ export default function PackageDetailPage() {
         }
 
         if (isSuccess) {
-            playSound('success');
+            playSuccessSound();
+            
+            // Tính tổng số lượng đơn thành công (bao gồm cả đơn vừa quét)
+            const validCount = updatedOrderDescriptions.filter((c: string) => {
+                if (c === code) return true; // Đơn vừa quét thành công
+                const o = orders.find(x => String(x.Description) === String(c));
+                if (!o) return false;
+                const pkgWithOrder = packages.find(p => p.id !== activePkg.id && p.orderDescriptions.includes(c));
+                return !pkgWithOrder && (o.Status === 'Đóng kiện' || o.Status === 'Kho Mỹ đã scan');
+            }).length;
+
+            try {
+                sayStatus(validCount.toString());
+            } catch (e) {
+                console.error("Lỗi đọc số:", e);
+            }
         } else {
-            playSound('error');
+            sayStatus('Thất bại');
         }
 
         setScanInput("");
@@ -450,6 +478,17 @@ export default function PackageDetailPage() {
                 <div className="hidden lg:block w-px bg-slate-100"></div>
 
                 <div className="flex items-center gap-4">
+                    <button 
+                        onClick={() => setSoundEnabled(!soundEnabled)}
+                        className={`p-2.5 rounded-xl transition flex items-center justify-center shadow-sm ${soundEnabled ? 'bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100' : 'bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100/80'}`}
+                        title={soundEnabled ? "Tắt âm thanh" : "Bật âm thanh"}
+                    >
+                        {soundEnabled ? (
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+                        ) : (
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z m5.414 0l6-6m0 6l-6-6"></path></svg>
+                        )}
+                    </button>
                     <button onClick={exportExcel} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition text-sm flex items-center gap-2 shadow-sm">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                         Xuất Excel
