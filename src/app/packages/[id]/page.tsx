@@ -39,17 +39,28 @@ export default function PackageDetailPage() {
 
             const loadVoices = () => {
                 const voices = window.speechSynthesis.getVoices();
-                // Build lưới quét giọng ưu tiên: Nữ > Google Nữ > Hoài My > Bất kỳ
-                // Bỏ block localService để chấp nhận fetch giọng nữ trên mây tránh việc bị gọi nhầm giọng Nam mặc định
+                // Xem danh sách giọng đổ về để hỗ trợ chọn (F12)
+                console.log("Danh sách giọng tự động:", voices.map(v => v.name));
+
+                // Bố ráp mọi tên có khả năng là giọng Nữ, và TẨY CHAY giọng Nam (Microsoft An)
                 const nuViet = voices.find(v => 
                     v.lang.includes('vi') && 
-                    (v.name.includes('HoaiMy') || v.name.includes('Google') || v.name.includes('Female'))
+                    !v.name.includes('An') && // Tránh giọng Microsoft An bằng mọi giá
+                    (v.name.includes('HoaiMy') || v.name.includes('Hoài My') || v.name.includes('Google') || v.name.includes('Female') || v.name.includes('Linh') || v.name.includes('Mai'))
                 );
+                
                 if (nuViet) {
                     setSelectedVoice(nuViet);
                 } else {
-                    const fallback = voices.find(v => v.lang.includes('vi'));
-                    setSelectedVoice(fallback || null);
+                    // Cố tìm một giọng Việt khác không phải tên An
+                    const anyNoAn = voices.find(v => v.lang.includes('vi') && !v.name.includes('An'));
+                    if (anyNoAn) {
+                        setSelectedVoice(anyNoAn);
+                    } else {
+                        // Kẹt quá không cài cắm gì mới phải đành dùng giọng mặc định
+                        const fallback = voices.find(v => v.lang.includes('vi'));
+                        setSelectedVoice(fallback || null);
+                    }
                 }
             };
             
