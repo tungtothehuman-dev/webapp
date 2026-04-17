@@ -126,36 +126,37 @@ export default function PrintPage() {
                 });
             }
 
-            // Nếu là Kho Mỹ (warehouse) thì mới cập nhật trạng thái "Kho Mỹ đã scan", Admin thì giữ nguyên
-            const now = new Date();
-            const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} ${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
+            if (currentUser?.role !== 'admin') {
+                const now = new Date();
+                const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} ${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
 
-            const newLog = {
-                action: "Đã Quét & In Lệnh",
-                user: currentUser ? currentUser.displayName : "Kho Mỹ",
-                timestamp: timeString
-            };
+                const newLog = {
+                    action: "Đã Quét & In Lệnh",
+                    user: currentUser && currentUser.displayName ? currentUser.displayName : "Kho Mỹ",
+                    timestamp: timeString
+                };
 
-            const updatedStatus = currentUser?.role === 'warehouse' ? "Kho Mỹ đã scan" : (order.Status || 'Chờ xử lý');
+                const updatedStatus = currentUser?.role === 'warehouse' ? "Kho Mỹ đã scan" : (order.Status || 'Chờ xử lý');
 
-            // Cập nhật State nội bộ
-            updateOrder(order.id, {
-                Status: updatedStatus,
-                ActionHistory: [...(order.ActionHistory || []), newLog]
-            });
-
-            // Bắn thẳng lên Database (Cực kỳ quan trọng để tài khoản khác thấy)
-            try {
-                const orderRef = doc(db, 'orders', order.id);
-                updateDoc(orderRef, {
+                // Cập nhật State nội bộ
+                updateOrder(order.id, {
                     Status: updatedStatus,
                     ActionHistory: [...(order.ActionHistory || []), newLog]
                 });
-            } catch (dbErr) {
-                console.error("Lỗi cập nhật CSDL:", dbErr);
+
+                // Bắn thẳng lên Database (Cực kỳ quan trọng để tài khoản khác thấy)
+                try {
+                    const orderRef = doc(db, 'orders', order.id);
+                    updateDoc(orderRef, {
+                        Status: updatedStatus,
+                        ActionHistory: [...(order.ActionHistory || []), newLog]
+                    });
+                } catch (dbErr) {
+                    console.error("Lỗi cập nhật CSDL:", dbErr);
+                }
             }
 
-            setLastScanResult({ status: 'success', message: `Đã dập lệnh In trực tiếp cho đơn hàng [${order.Description}] và cập nhật trạng thái kho!`, order });
+            setLastScanResult({ status: 'success', message: `Đã dập lệnh In trực tiếp cho đơn hàng [${order.Description}]${currentUser?.role !== 'admin' ? ' và cập nhật trạng thái kho!' : ''}`, order });
         } catch (err) {
             console.error("Lỗi khi In:", err);
             setLastScanResult({ status: 'error', message: "Có lỗi kĩ thuật khi cố gắng khởi động máy in." });
