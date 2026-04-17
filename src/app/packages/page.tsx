@@ -20,8 +20,6 @@ export default function PackagesPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [filterDest, setFilterDest] = useState("All");
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-  
   
   // Data for Create Modal
   const firstWarehouse = warehouses.length > 0 ? (typeof warehouses[0] === 'string' ? warehouses[0] : warehouses[0].name) : "";
@@ -75,55 +73,6 @@ export default function PackagesPage() {
       
       setIsCreating(false);
       router.push(`/packages/${newId}`);
-  };
-
-  const handleSyncTracking = async () => {
-        setIsSyncing(true);
-        const pendingPkgs = packages.filter(p => p.status.includes('Đã xuất kho') && p.masterTracking && p.masterTracking.length > 5);
-        
-        if (pendingPkgs.length === 0) {
-            await showAlert("Không có kiện hàng nào đang gửi đi chứa mã Track hợp lệ để kiểm tra!");
-            setIsSyncing(false);
-            return;
-        }
-
-        let updatedCount = 0;
-        let pendingConfigCount = 0;
-
-        for (const pkg of pendingPkgs) {
-             try {
-                  const res = await fetch('/api/track', {
-                      method: 'POST',
-                      headers: {'Content-Type': 'application/json'},
-                      body: JSON.stringify({ trackingNumber: pkg.masterTracking, carrier: 'UPS' })
-                  });
-                  const data = await res.json();
-                  
-                  if (data.pendingConfig) {
-                      pendingConfigCount++;
-                      break; // Ngưng luôn vì chưa trỏ file ENV
-                  }
-
-                  if (data.isDelivered) {
-                       updatePackage(pkg.id, { status: 'Delivered' });
-                       const { doc: fDoc, updateDoc } = await import('firebase/firestore');
-                       updateDoc(fDoc(db, 'packages', pkg.id), { status: 'Delivered' }).catch(err => console.error("Lỗi đẩy Delivered UPS lên mây", err));
-                       updatedCount++;
-                  }
-             } catch (e) {
-                 console.error("Lỗi gọi API track UPS kiện", pkg.id, e);
-             }
-        }
-
-        setIsSyncing(false);
-
-        if (pendingConfigCount > 0) {
-            await showAlert("LỖI CẤU HÌNH API UPS:\n\nTrường hợp này anh/chị cần lấy Client ID & Secret trên trang UPS Developer,\nsau đó mở thư mục gốc của code, sửa file '.env.local'.\nCuối cùng TẮT TERMINAL và CHẠY LẠI lệnh 'npm run dev' để cập nhật thay đổi nhé.");
-        } else if (updatedCount > 0) {
-            await showAlert(`Hoàn tất đồng bộ Tracking API!\n\nĐã nhận diện thành công ${updatedCount} kiện hàng được GIAO TỚI KHO. Hệ thống đã tự động bôi xanh kiện hàng.`);
-        } else {
-            await showAlert(`Hoàn tất đồng bộ Tracking API!\n\nĐã kiểm tra nhưng hiện tại kiện hàng của anh vẫn đang trên đường chuyển đi (In Transit), chưa kiện nào được giao tới nhận.`);
-        }
   };
 
 
@@ -192,18 +141,6 @@ export default function PackagesPage() {
                 
                 <div className="flex items-center gap-3 shrink-0">
 
-                   <button 
-                      onClick={handleSyncTracking}
-                      disabled={isSyncing}
-                      className="px-5 py-2.5 bg-sky-50 text-sky-600 hover:bg-sky-100 disabled:opacity-50 disabled:cursor-wait rounded-xl font-bold shadow-sm transition-transform active:scale-95 flex items-center gap-2 border border-sky-200"
-                   >
-                       {isSyncing ? (
-                          <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                       ) : (
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                       )}
-                       Đồng Bộ API Trạng Thái
-                   </button>
 
                    <button 
                       onClick={() => setIsCreating(true)}
@@ -275,7 +212,8 @@ export default function PackagesPage() {
                                                 {orderCount}
                                             </span>
                                         </td>
-                                        <td className="px-5 py-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                                        <td className="px-5 py-3 whitespace-nowrap items-center text-left" onClick={e => e.stopPropagation()}>
+                                            <div className="flex flex-col gap-1.5 items-start group relative w-fit">
                                             {pkg.status === 'Delivered' ? (
                                                 <button 
                                                     onClick={async () => {
@@ -312,10 +250,36 @@ export default function PackagesPage() {
                                                     ĐÃ XUẤT KHO
                                                 </button>
                                             ) : (
-                                                <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider whitespace-nowrap border bg-amber-50 text-amber-700 border-amber-200">
+                                                <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider whitespace-nowrap border cursor-help ${
+                                                    pkg.status === 'In Transit' ? 'bg-blue-50 text-blue-600 border-blue-200' :
+                                                    pkg.status === 'Alert' ? 'bg-red-50 text-red-600 border-red-200' :
+                                                    pkg.status === 'Undelivered' ? 'bg-orange-50 text-orange-600 border-orange-200' :
+                                                    pkg.status === 'Pick Up' ? 'bg-teal-50 text-teal-600 border-teal-200' :
+                                                    // Map 'Expired', 'Not Found' and anything else to Gray/Amber
+                                                    ['Expired', 'Not Found'].includes(pkg.status) ? 'bg-gray-50 text-gray-500 border-gray-200' :
+                                                    'bg-amber-50 text-amber-700 border-amber-200'
+                                                }`}>
                                                     {pkg.status}
                                                 </span>
                                             )}
+
+                                            {pkg.taxStatus && (
+                                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider whitespace-nowrap border flex items-center gap-1 ${
+                                                    pkg.taxStatus.includes('Cần Đóng Thuế') ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' :
+                                                    'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
+                                                }`}>
+                                                    {pkg.taxStatus.includes('Cần Đóng Thuế') ? <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span></span> : "✅"}
+                                                    {pkg.taxStatus}
+                                                </span>
+                                            )}
+
+                                            {pkg.lastTrackingEvent && (
+                                                <div className="absolute left-0 bottom-full mb-2 w-max max-w-[260px] bg-slate-800 text-white text-[11px] font-medium py-2 px-3 rounded shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 whitespace-pre-wrap">
+                                                    {pkg.lastTrackingEvent}
+                                                    <div className="absolute top-full left-4 border-4 border-transparent border-t-slate-800"></div>
+                                                </div>
+                                            )}
+                                            </div>
                                         </td>
                                         <td className="px-5 py-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
                                             {editingTrackId === pkg.id ? (
@@ -338,6 +302,15 @@ export default function PackagesPage() {
                                                                        });
                                                                     });
                                                                 });
+                                                                
+                                                                // Call 17track registration
+                                                                if (newVal.length > 5) {
+                                                                    fetch('/api/17track/register', {
+                                                                        method: 'POST',
+                                                                        headers: {'Content-Type': 'application/json'},
+                                                                        body: JSON.stringify({ trackingNumber: newVal, packageId: pkg.id })
+                                                                    }).catch(err => console.error(err));
+                                                                }
                                                             }
                                                         }}
                                                         onKeyDown={(e) => {

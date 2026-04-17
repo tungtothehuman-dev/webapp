@@ -54,6 +54,8 @@ export interface PackageRow {
   orderDescriptions: string[];
   masterTracking?: string;
   closedAt?: string;
+  taxStatus?: string;
+  lastTrackingEvent?: string;
 }
 
 interface PackageStore {
