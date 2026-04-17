@@ -69,8 +69,6 @@ export default function PackageDetailPage() {
         }
     }, []);
 
-    if (!mounted) return null;
-
     const activePkg = packages.find(p => p.id === id);
     const isClosed = activePkg?.status === 'Đã xuất kho Việt Nam' || activePkg?.status === 'Delivered';
 
@@ -97,6 +95,9 @@ export default function PackageDetailPage() {
         window.addEventListener('keydown', handleGlobalKeyDown);
         return () => window.removeEventListener('keydown', handleGlobalKeyDown);
     }, [isClosed, isScanning]);
+
+    // BẮT BUỘC ĐẶT IF (!MOUNTED) Ở ĐÂY - SAU KHI TẤT CẢ CÁC HOOKS ĐÃ ĐƯỢC GỌI!!!
+    if (!mounted) return null;
 
     if (!activePkg) {
         return (
