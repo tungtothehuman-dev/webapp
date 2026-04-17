@@ -25,12 +25,7 @@ export default function PackageDetailPage() {
     const [soundEnabled, setSoundEnabled] = useState(true);
     const [isScanning, setIsScanning] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
-
-    // Cập nhật dùng hàm updatePackage chuẩn từ store và lưu Firebase
-    const setPackage = (activePkg: any, updates: any) => {
-        updatePackage(activePkg.id, updates);
-        updateDoc(doc(db, 'packages', activePkg.id), updates).catch(e => console.error("Lỗi đồng bộ chi tiết kiện:", e));
-    };
+    const [selectedVoice, setSelectedVoice] = useState<any>(null);
 
     // Prevent hydration issues & Warm up TTS engine
     const [mounted, setMounted] = useState(false);
@@ -41,6 +36,25 @@ export default function PackageDetailPage() {
             const temp = new SpeechSynthesisUtterance('');
             temp.volume = 0;
             window.speechSynthesis.speak(temp);
+
+            const loadVoices = () => {
+                const voices = window.speechSynthesis.getVoices();
+                // Build lưới quét giọng ưu tiên: Nữ > Google Nữ > Hoài My > Bất kỳ
+                // Bỏ block localService để chấp nhận fetch giọng nữ trên mây tránh việc bị gọi nhầm giọng Nam mặc định
+                const nuViet = voices.find(v => 
+                    v.lang.includes('vi') && 
+                    (v.name.includes('HoaiMy') || v.name.includes('Google') || v.name.includes('Female'))
+                );
+                if (nuViet) {
+                    setSelectedVoice(nuViet);
+                } else {
+                    const fallback = voices.find(v => v.lang.includes('vi'));
+                    setSelectedVoice(fallback || null);
+                }
+            };
+            
+            loadVoices();
+            window.speechSynthesis.onvoiceschanged = loadVoices;
         }
     }, []);
 
@@ -57,65 +71,32 @@ export default function PackageDetailPage() {
         );
     }
 
+    // Cập nhật dùng hàm updatePackage chuẩn từ store và lưu Firebase
+    const setPackage = (activePkg: any, updates: any) => {
+        updatePackage(activePkg.id, updates);
+        updateDoc(doc(db, 'packages', activePkg.id), updates).catch(e => console.error("Lỗi đồng bộ chi tiết kiện:", e));
+    };
+
     const sayStatus = (text: string) => {
         if (!soundEnabled) return;
         try {
             if ('speechSynthesis' in window) {
                 const msg = new SpeechSynthesisUtterance(text);
                 msg.lang = 'vi-VN';
-                msg.rate = 1.3; 
+                msg.rate = 1.6; // Đẩy nhanh băng thông giọng đọc để tránh cảm giác bị kéo chữ
                 
-                const voices = window.speechSynthesis.getVoices();
-                // Tìm giọng Nữ miền Tây rặt (Microsoft HoaiMy)
-                // Ưu tiên bản Offline (localService) để đọc TỨC THÌ không bị delay mạng
-                let mienTayVoice = voices.find(v => (v.name.includes('HoaiMy') || v.name.includes('Southern')) && v.localService);
-                
-                // Nếu không có bản Offline, xài tạm bản Online (Natural)
-                if (!mienTayVoice) {
-                    mienTayVoice = voices.find(v => v.name.includes('HoaiMy') || v.name.includes('Southern'));
-                }
-                
-                if (mienTayVoice) {
-                    msg.voice = mienTayVoice;
-                } else {
-                    // Fallback giọng tiếng Việt có sẵn
-                    const fallback = voices.find(v => v.lang === 'vi-VN');
-                    if (fallback) msg.voice = fallback;
+                if (selectedVoice) {
+                    msg.voice = selectedVoice;
                 }
 
                 window.speechSynthesis.cancel();
-                window.speechSynthesis.speak(msg);
+                // Đẩy hàm đọc ra khỏi Main Thread để không tranh chấp với sự kiện JS khác
+                setTimeout(() => {
+                    window.speechSynthesis.speak(msg);
+                }, 0);
             }
         } catch (e) {
             console.error("Lỗi đọc số:", e);
-        }
-    };
-
-    const playSuccessSound = () => {
-        if (!soundEnabled) return;
-        try {
-            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-            if (!AudioContext) return;
-            const audioCtx = new AudioContext();
-            
-            const playNote = (freq: number, typeStr: OscillatorType, startTime: number, duration: number, vol = 0.1) => {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = typeStr;
-                osc.frequency.setValueAtTime(freq, startTime);
-                gain.gain.setValueAtTime(vol, startTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start(startTime);
-                osc.stop(startTime + duration);
-            };
-
-            const now = audioCtx.currentTime;
-            playNote(1000, 'sine', now, 0.1, 0.15); // Ting
-            playNote(2000, 'sine', now + 0.1, 0.15, 0.15); // Ting 2
-        } catch (e) {
-            console.error(e);
         }
     };
 
@@ -239,8 +220,6 @@ export default function PackageDetailPage() {
         }
 
         if (isSuccess) {
-            playSuccessSound();
-            
             // Tính tổng số lượng đơn thành công (bao gồm cả đơn vừa quét)
             const validCount = updatedOrderDescriptions.filter((c: string) => {
                 if (c === code) return true; // Đơn vừa quét thành công
