@@ -227,8 +227,9 @@ export default function PackagesPage() {
                                                         }
                                                     }}
                                                     title="Bấm để hoàn tác về Đã Xuất Kho"
-                                                    className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider whitespace-nowrap border bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:shadow-sm transition cursor-pointer"
+                                                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-extrabold uppercase tracking-wide whitespace-nowrap border shadow-sm transition-all bg-gradient-to-br from-blue-50 to-indigo-50 text-indigo-700 border-indigo-200 hover:shadow-md hover:from-indigo-100 hover:to-blue-100 cursor-pointer"
                                                 >
+                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7"></path></svg>
                                                     DELIVERED
                                                 </button>
                                             ) : pkg.status.includes('Đã xuất kho') ? (
@@ -245,30 +246,34 @@ export default function PackagesPage() {
                                                         }
                                                     }}
                                                     title="Bấm để báo Kho Mỹ Đã Nhận (Delivered)"
-                                                    className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider whitespace-nowrap border bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:shadow-sm transition cursor-pointer"
+                                                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-extrabold uppercase tracking-wide whitespace-nowrap border shadow-sm transition-all bg-gradient-to-br from-emerald-50 to-teal-50 text-teal-700 border-teal-200 hover:shadow-md hover:from-teal-100 hover:to-emerald-100 cursor-pointer"
                                                 >
+                                                    <svg className="w-3.5 h-3.5 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                                                     ĐÃ XUẤT KHO
                                                 </button>
                                             ) : (
-                                                <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider whitespace-nowrap border cursor-help ${
-                                                    pkg.status === 'In Transit' ? 'bg-blue-50 text-blue-600 border-blue-200' :
-                                                    pkg.status === 'Alert' ? 'bg-red-50 text-red-600 border-red-200' :
-                                                    pkg.status === 'Undelivered' ? 'bg-orange-50 text-orange-600 border-orange-200' :
-                                                    pkg.status === 'Pick Up' ? 'bg-teal-50 text-teal-600 border-teal-200' :
-                                                    // Map 'Expired', 'Not Found' and anything else to Gray/Amber
-                                                    ['Expired', 'Not Found'].includes(pkg.status) ? 'bg-gray-50 text-gray-500 border-gray-200' :
-                                                    'bg-amber-50 text-amber-700 border-amber-200'
+                                                <span className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-extrabold uppercase tracking-wide whitespace-nowrap border shadow-sm ${
+                                                    pkg.status === 'In Transit' ? 'bg-gradient-to-r from-blue-50 to-cyan-50 text-blue-700 border-blue-200' :
+                                                    pkg.status === 'Alert' ? 'bg-gradient-to-r from-rose-50 to-red-50 text-red-700 border-red-200' :
+                                                    pkg.status === 'Undelivered' ? 'bg-gradient-to-r from-orange-50 to-amber-50 text-orange-700 border-orange-200' :
+                                                    pkg.status === 'Pick Up' ? 'bg-gradient-to-r from-teal-50 to-emerald-50 text-teal-700 border-teal-200' :
+                                                    ['Expired', 'Not Found'].includes(pkg.status) ? 'bg-gradient-to-r from-slate-50 to-gray-50 text-slate-600 border-slate-200' :
+                                                    'bg-gradient-to-r from-amber-50 to-yellow-50 text-amber-700 border-amber-200'
                                                 }`}>
                                                     {pkg.status}
                                                 </span>
                                             )}
 
                                             {pkg.taxStatus && (
-                                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider whitespace-nowrap border flex items-center gap-1 ${
-                                                    pkg.taxStatus.includes('Cần Đóng Thuế') ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' :
-                                                    'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
+                                                <span className={`flex items-center gap-1.5 px-3 py-1 mt-0.5 rounded-lg text-[10px] font-extrabold uppercase tracking-widest whitespace-nowrap border shadow-sm transition-all group-hover:shadow-md ${
+                                                    pkg.taxStatus.includes('Cần Đóng Thuế') ? 'bg-gradient-to-r from-rose-100 to-red-50 text-red-700 border-red-300 shadow-red-500/10' :
+                                                    'bg-gradient-to-r from-emerald-100 to-green-50 text-emerald-800 border-emerald-300 shadow-emerald-500/10'
                                                 }`}>
-                                                    {pkg.taxStatus.includes('Cần Đóng Thuế') ? <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span></span> : "✅"}
+                                                    {pkg.taxStatus.includes('Cần Đóng Thuế') ? (
+                                                        <span className="relative flex h-2 w-2 mr-0.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-red-600"></span></span>
+                                                    ) : (
+                                                        <svg className="w-3.5 h-3.5 text-emerald-600 stroke-[3px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg>
+                                                    )}
                                                     {pkg.taxStatus}
                                                 </span>
                                             )}
