@@ -48,10 +48,42 @@ export default function PackageDetailPage() {
         );
     }
 
+    const playSound = (type: 'success' | 'error') => {
+        try {
+            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+            if (!AudioContext) return;
+            const audioCtx = new AudioContext();
+            
+            const playNote = (freq: number, typeStr: OscillatorType, startTime: number, duration: number, vol = 0.1) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = typeStr;
+                osc.frequency.setValueAtTime(freq, startTime);
+                gain.gain.setValueAtTime(vol, startTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(startTime);
+                osc.stop(startTime + duration);
+            };
+
+            const now = audioCtx.currentTime;
+            if (type === 'success') {
+                playNote(1000, 'sine', now, 0.1, 0.15); // Ting
+                playNote(2000, 'sine', now + 0.1, 0.15, 0.15); // Ting 2
+            } else {
+                playNote(150, 'sawtooth', now, 0.4, 0.2); // Buuzzzz
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
     const handleScanSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
         if (activePkg.status === 'Đã xuất kho Việt Nam') {
+            playSound('error');
             await showAlert("Kiện hàng đã xuất kho! Không thể thêm mã mới.");
             return;
         }
@@ -103,6 +135,7 @@ export default function PackageDetailPage() {
         const code = (orderMatchIdx !== -1 && orders[orderMatchIdx].Description) ? String(orders[orderMatchIdx].Description) : String(rawCode);
 
         if (activePkg.orderDescriptions.includes(code)) {
+            playSound('error');
             await showAlert(`Mã ${code} đã nằm trong kiện quản lý!`);
             setScanInput("");
             return;
@@ -131,6 +164,8 @@ export default function PackageDetailPage() {
         const updatedOrderDescriptions = [code, ...activePkg.orderDescriptions];
         setPackage(activePkg, { orderDescriptions: updatedOrderDescriptions });
 
+        let isSuccess = false;
+
         if (orderMatchIdx !== -1) {
             const orderMatch = orders[orderMatchIdx];
             const status = orderMatch.Status || 'Chờ xử lý';
@@ -138,6 +173,7 @@ export default function PackageDetailPage() {
 
             // Chỉ cập nhật trạng thái đơn thành 'Đóng kiện' nếu hoàn toàn hợp lệ và KHÔNG bị lỗi HUB
             if (!pkgContainingOrder && status === 'Chờ xử lý' && !isHubError) {
+                isSuccess = true;
                 const now = new Date();
                 const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} ${now.getDate().toString().padStart(2, '0')}/${(now.getMonth()+1).toString().padStart(2, '0')}/${now.getFullYear()}`;
                 const newLog = {
@@ -160,6 +196,12 @@ export default function PackageDetailPage() {
                     console.error("Lỗi cập nhật CSDL đóng kiện:", e);
                 }
             }
+        }
+
+        if (isSuccess) {
+            playSound('success');
+        } else {
+            playSound('error');
         }
 
         setScanInput("");
