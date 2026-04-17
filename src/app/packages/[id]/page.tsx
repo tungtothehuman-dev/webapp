@@ -32,9 +32,17 @@ export default function PackageDetailPage() {
         updateDoc(doc(db, 'packages', activePkg.id), updates).catch(e => console.error("Lỗi đồng bộ chi tiết kiện:", e));
     };
 
-    // Prevent hydration issues
+    // Prevent hydration issues & Warm up TTS engine
     const [mounted, setMounted] = useState(false);
-    useEffect(() => setMounted(true), []);
+    useEffect(() => {
+        setMounted(true);
+        // Kích hoạt ngầm bộ đọc để lần quét đầu tiên không bị khựng (Warm-up)
+        if ('speechSynthesis' in window) {
+            const temp = new SpeechSynthesisUtterance('');
+            temp.volume = 0;
+            window.speechSynthesis.speak(temp);
+        }
+    }, []);
 
     if (!mounted) return null;
 
@@ -56,6 +64,25 @@ export default function PackageDetailPage() {
                 const msg = new SpeechSynthesisUtterance(text);
                 msg.lang = 'vi-VN';
                 msg.rate = 1.3; 
+                
+                const voices = window.speechSynthesis.getVoices();
+                // Tìm giọng Nữ miền Tây rặt (Microsoft HoaiMy)
+                // Ưu tiên bản Offline (localService) để đọc TỨC THÌ không bị delay mạng
+                let mienTayVoice = voices.find(v => (v.name.includes('HoaiMy') || v.name.includes('Southern')) && v.localService);
+                
+                // Nếu không có bản Offline, xài tạm bản Online (Natural)
+                if (!mienTayVoice) {
+                    mienTayVoice = voices.find(v => v.name.includes('HoaiMy') || v.name.includes('Southern'));
+                }
+                
+                if (mienTayVoice) {
+                    msg.voice = mienTayVoice;
+                } else {
+                    // Fallback giọng tiếng Việt có sẵn
+                    const fallback = voices.find(v => v.lang === 'vi-VN');
+                    if (fallback) msg.voice = fallback;
+                }
+
                 window.speechSynthesis.cancel();
                 window.speechSynthesis.speak(msg);
             }
