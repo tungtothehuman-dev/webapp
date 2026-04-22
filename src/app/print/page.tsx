@@ -100,6 +100,12 @@ export default function PrintPage() {
 
         const order = orders[orderIndex];
 
+        if (order.Status === 'Đã Hủy') {
+            setLastScanResult({ status: 'error', message: `Lỗi: Đơn hàng [${order.Description || 'KhongMa'}] đã bị HỦY. KHÔNG THỂ IN NHÃN!`, order });
+            setScanValue("");
+            return;
+        }
+
         // Lôi mẹo nạp đạn ra xài: Ưu tiên xài đạn local (ổ cứng), nếu chưa kịp nạp thì xài đạn Cloudinary.
         const pdfToPrint = blobUrls[order.id] || order.pdfUrl || order.pdfBase64;
 
