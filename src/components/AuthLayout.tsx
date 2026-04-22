@@ -80,28 +80,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           const unsubscribePackages = onSnapshot(collection(db, 'packages'), (snapshot) => {
              let docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
              
-             // Thuật toán MERGE: Trộn lẫn các kiện hiện đang kẹt trong LocalStorage nhưng chưa lên mây
-             // Để tránh tình trạng Firebase ghi đè làm mất kiện của khách chưa kịp Ép Đồng Bộ
-             const localPackages = usePackageStore.getState().packages;
-             if (localPackages.length > 0) {
-                 const firebaseIds = new Set(docs.map(d => d.id));
-                 const missingPackages = localPackages.filter(p => !firebaseIds.has(p.id));
-                 
-                 if (missingPackages.length > 0) {
-                     // Nhét tạm vào list hiển thị để không bị biến mất trên màn hình
-                     docs = [...docs, ...missingPackages];
-                     
-                     // TỰ ĐỘNG ĐẨY LÊN MÂY (Auto Sync)
-                     try {
-                         const batch = writeBatch(db);
-                         missingPackages.forEach(pkg => batch.set(doc(db, 'packages', pkg.id), pkg));
-                         batch.commit().catch(e => console.error("Auto Sync Error:", e));
-                         console.log(`Đã TỰ ĐỘNG đẩy ${missingPackages.length} kiện mắc kẹt lên Firebase!`);
-                     } catch (err) {
-                         console.error("Lỗi tự động đồng bộ:", err);
-                     }
-                 }
-             }
+             // Firebase's onSnapshot already handles offline caching and pending writes natively. 
+             // We use Firebase as the absolute source of truth to avoid zombie packages reappearing.
              
              // Sort kiện mới nhất lên trên
              docs.sort((a, b) => {
