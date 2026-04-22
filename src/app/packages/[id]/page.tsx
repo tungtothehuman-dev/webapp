@@ -70,7 +70,7 @@ export default function PackageDetailPage() {
     }, []);
 
     const activePkg = packages.find(p => p.id === id);
-    const isClosed = activePkg?.status === 'Đã xuất kho Việt Nam' || activePkg?.status === 'Delivered';
+    const isClosed = activePkg?.status !== 'Khởi tạo';
 
     // Auto-capture máy quét vạch / gõ phím mà không cần click box (Chỉ hoạt động khi ĐÃ BẤM Quét)
     useEffect(() => {
@@ -593,7 +593,7 @@ export default function PackageDetailPage() {
                     >
                         {isClosed ? "Mở lại kiện" : "Đóng kiện hàng"}
                     </button>
-                    {activePkg.status === 'Đã xuất kho Việt Nam' && (
+                    {(activePkg.status !== 'Khởi tạo' && activePkg.status !== 'Delivered') && (
                         <button onClick={markAsDelivered} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-md transition text-sm shadow-md shadow-blue-500/20">
                             Kho Mỹ Đã Nhận (Delivered)
                         </button>

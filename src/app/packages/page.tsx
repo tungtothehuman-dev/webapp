@@ -205,7 +205,7 @@ export default function PackagesPage() {
                                             {pkg.createdAt}
                                         </td>
                                         <td className="px-5 py-3 whitespace-nowrap text-sm font-medium text-slate-600">
-                                            {['Đã xuất kho Việt Nam', 'Delivered'].includes(pkg.status) ? ((pkg as any).closedAt || "Đã đóng") : "-"}
+                                            {pkg.status !== 'Khởi tạo' ? ((pkg as any).closedAt || "Đã đóng") : "-"}
                                         </td>
                                         <td className="px-5 py-3 whitespace-nowrap text-center">
                                             <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-extrabold text-xs">
