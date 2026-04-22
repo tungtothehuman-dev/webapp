@@ -1181,8 +1181,16 @@ export default function OrdersPage() {
 
                   {/* Card 2: Thông tin Hàng hóa */}
                   <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                    <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+                    <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                       <h3 className="text-lg font-bold text-slate-800">Thông tin hàng hóa</h3>
+                      <button 
+                        onClick={() => handleManualUploadClick(selectedDetail.id)} 
+                        className="px-3 py-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                        title="Tải lên PDF Label mới để ghi đè"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        Thay Label
+                      </button>
                     </div>
                     <div className="p-5 space-y-3">
                       <div className="flex border-b border-dashed border-slate-100 pb-2">
