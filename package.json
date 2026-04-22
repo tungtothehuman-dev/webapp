@@ -16,6 +16,7 @@
     "fastest-levenshtein": "^1.0.16",
     "file-saver": "^2.0.5",
     "firebase": "^12.11.0",
+    "html5-qrcode": "^2.3.8",
     "jsbarcode": "^3.12.3",
     "jszip": "^3.10.1",
     "lucide-react": "^1.7.0",
